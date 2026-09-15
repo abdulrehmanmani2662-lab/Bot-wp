@@ -11,9 +11,12 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 
-// ================= CONFIG =================
+// ==================================================
+// CONFIG
+// ==================================================
 
 const PORT = process.env.PORT || 3000;
+
 const REPORT_DAYS = 7;
 
 const TARGET_GROUP_NAMES = [
@@ -21,109 +24,201 @@ const TARGET_GROUP_NAMES = [
   "test"
 ];
 
-// ================= FREE RENDER STORAGE =================
+// ==================================================
+// FREE RENDER STORAGE
+// ==================================================
 
 const BASE = __dirname;
 
 const AUTH_DIR = path.join(BASE, "auth");
 const DATA_DIR = path.join(BASE, "data");
 
-const LOG_FILE = path.join(DATA_DIR, "messageLog.json");
-const STATE_FILE = path.join(DATA_DIR, "botState.json");
-const GROUP_FILE = path.join(DATA_DIR, "groups.json");
+const LOG_FILE =
+  path.join(DATA_DIR, "messageLog.json");
 
-// Create folders
-for (const dir of [AUTH_DIR, DATA_DIR]) {
+const STATE_FILE =
+  path.join(DATA_DIR, "botState.json");
+
+const GROUP_FILE =
+  path.join(DATA_DIR, "groups.json");
+
+// ==================================================
+// CREATE FOLDERS
+// ==================================================
+
+for (const dir of [
+  AUTH_DIR,
+  DATA_DIR
+]) {
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, {
+      recursive: true
+    });
   }
 }
 
-// ================= JSON =================
+// ==================================================
+// JSON LOAD
+// ==================================================
 
 function loadJSON(file, fallback) {
+
   try {
+
     if (fs.existsSync(file)) {
+
       return JSON.parse(
-        fs.readFileSync(file, "utf8")
+        fs.readFileSync(
+          file,
+          "utf8"
+        )
       );
+
     }
+
   } catch (e) {
-    console.log("JSON load error:", e.message);
+
+    console.log(
+      "JSON load error:",
+      e.message
+    );
+
   }
 
   return fallback;
 }
 
+// ==================================================
+// LOAD SAVED DATA
+// ==================================================
+
 let messageLog =
-  loadJSON(LOG_FILE, {});
+  loadJSON(
+    LOG_FILE,
+    {}
+  );
 
 let botState =
-  loadJSON(STATE_FILE, {
-    cycleStart: Date.now()
-  });
+  loadJSON(
+    STATE_FILE,
+    {
+      cycleStart: Date.now()
+    }
+  );
 
 let savedGroups =
-  loadJSON(GROUP_FILE, []);
+  loadJSON(
+    GROUP_FILE,
+    []
+  );
 
-// ================= SAVE =================
+// ==================================================
+// SAVE DATA
+// ==================================================
 
 function saveData() {
+
   try {
+
     fs.writeFileSync(
       LOG_FILE,
-      JSON.stringify(messageLog)
+      JSON.stringify(
+        messageLog,
+        null,
+        2
+      )
     );
 
     fs.writeFileSync(
       STATE_FILE,
-      JSON.stringify(botState)
+      JSON.stringify(
+        botState,
+        null,
+        2
+      )
     );
 
     fs.writeFileSync(
       GROUP_FILE,
-      JSON.stringify(savedGroups)
+      JSON.stringify(
+        savedGroups,
+        null,
+        2
+      )
     );
+
   } catch (e) {
+
     console.log(
       "Save error:",
       e.message
     );
+
   }
+
 }
 
-// ================= HELPERS =================
+// ==================================================
+// HELPERS
+// ==================================================
 
 function normalizeJid(jid) {
+
   return (jid || "")
     .split(":")[0]
     .toLowerCase();
+
 }
 
 function formatNumber(jid) {
-  let n = (jid || "")
-    .split("@")[0]
-    .split(":")[0];
+
+  let n =
+    (jid || "")
+      .split("@")[0]
+      .split(":")[0];
 
   if (n.startsWith("92")) {
-    n = "0" + n.slice(2);
+    n =
+      "0" +
+      n.slice(2);
   }
 
   return n;
+
 }
 
 function normalizeGroupName(name) {
+
   return (name || "")
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, " ");
+    .replace(
+      /\s+/g,
+      " "
+    );
+
 }
 
+// ==================================================
+// BOT VARIABLES
+// ==================================================
+
 let sock = null;
+
 let ownerJid = null;
+
 let latestQR = null;
 
-// ================= WEB =================
+// QR generation time
+let qrGeneratedAt = 0;
+
+// QR lifetime
+const QR_REFRESH_TIME =
+  45000;
+
+// ==================================================
+// WEB SERVER
+// ==================================================
 
 const app = express();
 
@@ -132,8 +227,10 @@ app.get("/", (req, res) => {
   res.send(`
 <!DOCTYPE html>
 <html>
+
 <head>
 <title>WhatsApp Report Bot</title>
+<meta name="viewport" content="width=device-width">
 </head>
 
 <body style="
@@ -155,7 +252,8 @@ ${
 </p>
 
 <p>
-Groups: ${savedGroups.length}/2
+Groups:
+${savedGroups.length}/2
 </p>
 
 <a href="/qr"
@@ -176,6 +274,10 @@ display:inline-block;
 
 });
 
+// ==================================================
+// QR PAGE
+// ==================================================
+
 app.get("/qr", async (req, res) => {
 
   if (!latestQR) {
@@ -183,6 +285,11 @@ app.get("/qr", async (req, res) => {
     return res.send(`
 <!DOCTYPE html>
 <html>
+
+<head>
+<meta http-equiv="refresh" content="5">
+<meta name="viewport" content="width=device-width">
+</head>
 
 <body style="
 background:#111;
@@ -192,11 +299,15 @@ font-family:Arial;
 padding:40px;
 ">
 
-<h2>📱 QR Available Nahi Hai</h2>
+<h2>⏳ QR Waiting...</h2>
 
-<p>Bot already connected ho sakta hai.</p>
+<p>
+Bot QR generate kar raha hai.
+</p>
 
-<meta http-equiv="refresh" content="5">
+<p>
+Page automatically refresh hoga.
+</p>
 
 </body>
 </html>
@@ -215,6 +326,19 @@ padding:40px;
 <!DOCTYPE html>
 <html>
 
+<head>
+
+<meta http-equiv="refresh"
+content="5">
+
+<meta
+name="viewport"
+content="width=device-width">
+
+<title>WhatsApp QR</title>
+
+</head>
+
 <body style="
 background:#111;
 color:white;
@@ -226,7 +350,8 @@ padding:30px;
 <h2>📱 WhatsApp QR</h2>
 
 <p>
-WhatsApp → Linked Devices → Link a Device
+WhatsApp → Linked Devices
+→ Link a Device
 </p>
 
 <img
@@ -239,50 +364,80 @@ padding:10px;
 border-radius:10px;
 ">
 
-<p>QR Scan Karein</p>
+<p>
+⏳ QR expire hone par
+naya QR automatically ayega.
+</p>
 
-<script>
-setTimeout(
-  () => location.reload(),
-  15000
-);
-</script>
+<p>
+🔄 Page 5 seconds mein refresh hoga.
+</p>
 
 </body>
+
 </html>
 `);
 
   } catch (e) {
 
     res.send(
-      "QR error: " + e.message
+      "QR error: " +
+      e.message
     );
 
   }
 
 });
 
-app.get("/health", (req, res) => {
+// ==================================================
+// HEALTH
+// ==================================================
 
-  res.json({
-    status: "ok",
-    whatsapp: ownerJid
-      ? "connected"
-      : "waiting",
-    groups: savedGroups.length
-  });
+app.get(
+  "/health",
+  (req, res) => {
 
-});
+    res.json({
 
-app.listen(PORT, () => {
+      status: "ok",
 
-  console.log(
-    "🌐 Server running on port " + PORT
-  );
+      whatsapp:
+        ownerJid
+          ? "connected"
+          : "waiting",
 
-});
+      groups:
+        savedGroups.length,
 
-// ================= FIND GROUPS =================
+      qr:
+        latestQR
+          ? "available"
+          : "waiting"
+
+    });
+
+  }
+);
+
+// ==================================================
+// START SERVER
+// ==================================================
+
+app.listen(
+  PORT,
+  () => {
+
+    console.log(
+      "🌐 Server running on port " +
+      PORT
+    );
+
+  }
+);
+
+// ==================================================
+// FIND TARGET GROUPS
+// ==================================================
 
 async function findTargetGroups() {
 
@@ -293,15 +448,21 @@ async function findTargetGroups() {
 
     const found = [];
 
-    for (const jid of Object.keys(groups)) {
+    for (
+      const jid
+      of Object.keys(groups)
+    ) {
 
-      const group = groups[jid];
+      const group =
+        groups[jid];
 
       const groupName =
         group.subject || "";
 
       const normalized =
-        normalizeGroupName(groupName);
+        normalizeGroupName(
+          groupName
+        );
 
       for (
         const targetName
@@ -310,7 +471,9 @@ async function findTargetGroups() {
 
         if (
           normalized ===
-          normalizeGroupName(targetName)
+          normalizeGroupName(
+            targetName
+          )
         ) {
 
           if (
@@ -320,8 +483,12 @@ async function findTargetGroups() {
           ) {
 
             found.push({
+
               jid,
-              name: groupName
+
+              name:
+                groupName
+
             });
 
           }
@@ -338,11 +505,14 @@ async function findTargetGroups() {
     saveData();
 
     console.log("");
+
     console.log(
       "========== GROUPS =========="
     );
 
-    if (!savedGroups.length) {
+    if (
+      !savedGroups.length
+    ) {
 
       console.log(
         "❌ Target groups nahi mile."
@@ -369,6 +539,7 @@ async function findTargetGroups() {
     console.log(
       "============================"
     );
+
     console.log("");
 
   } catch (e) {
@@ -382,24 +553,31 @@ async function findTargetGroups() {
 
 }
 
-// ================= CHECK GROUP =================
+// ==================================================
+// TARGET GROUP CHECK
+// ==================================================
 
 function isTargetGroup(jid) {
 
   return savedGroups.some(
-    g => g.jid === jid
+    g =>
+      g.jid === jid
   );
 
 }
 
-// ================= GROUP LIST =================
+// ==================================================
+// GROUP COMMAND
+// ==================================================
 
 async function sendGroupsList(chat) {
 
   let text =
     "📋 *BOT KE GROUPS*\n\n";
 
-  if (!savedGroups.length) {
+  if (
+    !savedGroups.length
+  ) {
 
     text +=
       "❌ Abhi groups detect nahi hue.";
@@ -419,14 +597,20 @@ async function sendGroupsList(chat) {
 
   await sock.sendMessage(
     chat,
-    { text }
+    {
+      text
+    }
   );
 
 }
 
-// ================= REPORT =================
+// ==================================================
+// SEND REPORT
+// ==================================================
 
-async function sendReport(groupJid) {
+async function sendReport(
+  groupJid
+) {
 
   try {
 
@@ -455,11 +639,18 @@ async function sendReport(groupJid) {
     text +=
       `🗓 *Start:* ${
         new Date(start)
-          .toLocaleDateString("en-GB")
+          .toLocaleDateString(
+            "en-GB"
+          )
       }\n\n`;
 
     const active = [];
+
     const inactive = [];
+
+    // ==================================================
+    // COUNT MEMBERS
+    // ==================================================
 
     for (
       const member
@@ -467,12 +658,17 @@ async function sendReport(groupJid) {
     ) {
 
       const count =
-        (groupData[member] || [])
-          .filter(
-            t => t >= start
-          ).length;
+        (
+          groupData[member] ||
+          []
+        ).filter(
+          t =>
+            t >= start
+        ).length;
 
-      if (count > 0) {
+      if (
+        count > 0
+      ) {
 
         active.push([
           member,
@@ -481,20 +677,29 @@ async function sendReport(groupJid) {
 
       } else {
 
-        inactive.push(member);
+        inactive.push(
+          member
+        );
 
       }
 
     }
 
     active.sort(
-      (a, b) => b[1] - a[1]
+      (a, b) =>
+        b[1] - a[1]
     );
+
+    // ==================================================
+    // ACTIVE
+    // ==================================================
 
     text +=
       "✅ *ACTIVE MEMBERS:*\n\n";
 
-    if (!active.length) {
+    if (
+      !active.length
+    ) {
 
       text +=
         "Kisi ne message nahi kiya 😅\n";
@@ -502,7 +707,10 @@ async function sendReport(groupJid) {
     } else {
 
       for (
-        const [member, count]
+        const [
+          member,
+          count
+        ]
         of active
       ) {
 
@@ -513,10 +721,16 @@ async function sendReport(groupJid) {
 
     }
 
+    // ==================================================
+    // INACTIVE
+    // ==================================================
+
     text +=
       `\n❌ *${REPORT_DAYS} DIN ME 0 MESSAGES:*\n\n`;
 
-    if (!inactive.length) {
+    if (
+      !inactive.length
+    ) {
 
       text +=
         "Koi nahi — sab active ✅\n";
@@ -537,7 +751,9 @@ async function sendReport(groupJid) {
 
     await sock.sendMessage(
       groupJid,
-      { text }
+      {
+        text
+      }
     );
 
     console.log(
@@ -556,7 +772,9 @@ async function sendReport(groupJid) {
 
 }
 
-// ================= START BOT =================
+// ==================================================
+// START WHATSAPP
+// ==================================================
 
 async function startBot() {
 
@@ -575,43 +793,60 @@ async function startBot() {
     } =
       await fetchLatestBaileysVersion();
 
-    sock = makeWASocket({
+    sock =
+      makeWASocket({
 
-      version,
+        version,
 
-      logger:
-        pino({
-          level: "silent"
-        }),
+        logger:
+          pino({
+            level:
+              "silent"
+          }),
 
-      auth: {
-        creds: state.creds,
+        auth: {
 
-        keys:
-          makeCacheableSignalKeyStore(
-            state.keys,
-            pino({
-              level: "silent"
-            })
-          )
-      },
+          creds:
+            state.creds,
 
-      printQRInTerminal: false,
+          keys:
+            makeCacheableSignalKeyStore(
+              state.keys,
 
-      connectTimeoutMs: 60000,
+              pino({
+                level:
+                  "silent"
+              })
+            )
 
-      defaultQueryTimeoutMs: 0,
+        },
 
-      keepAliveIntervalMs: 10000
+        printQRInTerminal:
+          false,
 
-    });
+        connectTimeoutMs:
+          60000,
+
+        defaultQueryTimeoutMs:
+          0,
+
+        keepAliveIntervalMs:
+          10000
+
+      });
+
+    // ==================================================
+    // SAVE WHATSAPP AUTH
+    // ==================================================
 
     sock.ev.on(
       "creds.update",
       saveCreds
     );
 
-    // ================= CONNECTION =================
+    // ==================================================
+    // CONNECTION UPDATE
+    // ==================================================
 
     sock.ev.on(
       "connection.update",
@@ -619,27 +854,49 @@ async function startBot() {
 
         const {
           connection,
-          qr
+          qr,
+          lastDisconnect
         } = update;
+
+        // ==================================================
+        // NEW QR
+        // ==================================================
 
         if (qr) {
 
-          latestQR = qr;
+          latestQR =
+            qr;
+
+          qrGeneratedAt =
+            Date.now();
 
           console.log(
-            "📱 QR generated → open /qr"
+            "📱 NEW QR GENERATED"
+          );
+
+          console.log(
+            "🌐 Open /qr"
           );
 
         }
+
+        // ==================================================
+        // CONNECTED
+        // ==================================================
 
         if (
           connection === "open"
         ) {
 
-          latestQR = null;
+          latestQR =
+            null;
+
+          qrGeneratedAt =
+            0;
 
           ownerJid =
-            sock.user?.id || null;
+            sock.user?.id ||
+            null;
 
           console.log(
             "================================"
@@ -655,25 +912,45 @@ async function startBot() {
           );
 
           console.log(
+            "💾 Saved message data:",
+            Object.keys(
+              messageLog
+            ).length
+          );
+
+          console.log(
+            "🗓 Cycle started:",
+            new Date(
+              botState.cycleStart
+            ).toISOString()
+          );
+
+          console.log(
             "================================"
           );
 
+          // Find groups
           await findTargetGroups();
 
         }
+
+        // ==================================================
+        // DISCONNECTED
+        // ==================================================
 
         if (
           connection === "close"
         ) {
 
-          ownerJid = null;
+          ownerJid =
+            null;
 
           console.log(
             "❌ WhatsApp disconnected"
           );
 
           console.log(
-            "🔄 Reconnecting..."
+            "🔄 Reconnecting in 5 seconds..."
           );
 
           setTimeout(
@@ -686,7 +963,9 @@ async function startBot() {
       }
     );
 
-    // ================= MESSAGES =================
+    // ==================================================
+    // MESSAGE HANDLER
+    // ==================================================
 
     sock.ev.on(
       "messages.upsert",
@@ -704,6 +983,7 @@ async function startBot() {
             !msg.message
           ) return;
 
+          // Don't count own messages
           if (
             msg.key.fromMe
           ) return;
@@ -713,8 +993,11 @@ async function startBot() {
 
           if (!chat) return;
 
+          // Only groups
           if (
-            !chat.endsWith("@g.us")
+            !chat.endsWith(
+              "@g.us"
+            )
           ) return;
 
           const sender =
@@ -736,15 +1019,23 @@ async function startBot() {
               .trim()
               .toLowerCase();
 
-          // Owner command
+          // ==================================================
+          // OWNER COMMAND
+          // ==================================================
+
           if (
             ownerJid &&
-            normalizeJid(sender) ===
-            normalizeJid(ownerJid)
+            normalizeJid(
+              sender
+            ) ===
+            normalizeJid(
+              ownerJid
+            )
           ) {
 
             if (
-              command === "!groups"
+              command ===
+              "!groups"
             ) {
 
               await sendGroupsList(
@@ -757,21 +1048,30 @@ async function startBot() {
 
           }
 
-          // Only target groups
+          // ==================================================
+          // ONLY TARGET GROUPS
+          // ==================================================
+
           if (
-            !isTargetGroup(chat)
+            !isTargetGroup(
+              chat
+            )
           ) {
 
             return;
 
           }
 
-          // Save message
+          // ==================================================
+          // CREATE GROUP DATA
+          // ==================================================
+
           if (
             !messageLog[chat]
           ) {
 
-            messageLog[chat] = {};
+            messageLog[chat] =
+              {};
 
           }
 
@@ -784,24 +1084,44 @@ async function startBot() {
 
           }
 
+          // ==================================================
+          // MESSAGE TIME
+          // ==================================================
+
           const timestamp =
             Number(
               msg.messageTimestamp ||
               0
             ) * 1000;
 
-          if (timestamp) {
+          if (
+            timestamp
+          ) {
 
             messageLog[chat][sender]
               .push(timestamp);
 
+          } else {
+
+            // Fallback if timestamp unavailable
+            messageLog[chat][sender]
+              .push(Date.now());
+
           }
+
+          // ==================================================
+          // SAVE IMMEDIATELY
+          // ==================================================
 
           saveData();
 
-          // !stats
+          // ==================================================
+          // STATS COMMAND
+          // ==================================================
+
           if (
-            command !== "!stats"
+            command !==
+            "!stats"
           ) {
 
             return;
@@ -811,8 +1131,12 @@ async function startBot() {
           // Owner only
           if (
             !ownerJid ||
-            normalizeJid(sender) !==
-            normalizeJid(ownerJid)
+            normalizeJid(
+              sender
+            ) !==
+            normalizeJid(
+              ownerJid
+            )
           ) {
 
             console.log(
@@ -840,7 +1164,60 @@ async function startBot() {
       }
     );
 
-    // ================= 7 DAY REPORT =================
+    // ==================================================
+    // QR WATCHDOG
+    // ==================================================
+
+    setInterval(
+      () => {
+
+        if (
+          latestQR &&
+          Date.now() -
+            qrGeneratedAt >
+            QR_REFRESH_TIME
+        ) {
+
+          console.log(
+            "♻️ QR expired. Waiting for new QR..."
+          );
+
+          latestQR =
+            null;
+
+          qrGeneratedAt =
+            0;
+
+          // Closing the socket forces
+          // Baileys to generate a fresh QR
+          try {
+
+            if (
+              sock
+            ) {
+
+              sock.ws?.close();
+
+            }
+
+          } catch (e) {
+
+            console.log(
+              "QR refresh error:",
+              e.message
+            );
+
+          }
+
+        }
+
+      },
+      10000
+    );
+
+    // ==================================================
+    // 7 DAY AUTO REPORT
+    // ==================================================
 
     setInterval(
       async () => {
@@ -865,9 +1242,10 @@ async function startBot() {
             ) {
 
               console.log(
-                "⏰ 7 days complete."
+                "⏰ 7 DAYS COMPLETE"
               );
 
+              // Send both reports
               for (
                 const group
                 of savedGroups
@@ -879,15 +1257,17 @@ async function startBot() {
 
               }
 
+              // Start new cycle
               botState.cycleStart =
                 Date.now();
 
-              messageLog = {};
+              messageLog =
+                {};
 
               saveData();
 
               console.log(
-                "🔄 New 7-day cycle started."
+                "🔄 NEW 7-DAY CYCLE STARTED"
               );
 
             }
@@ -923,7 +1303,9 @@ async function startBot() {
 
 }
 
-// ================= START =================
+// ==================================================
+// START
+// ==================================================
 
 console.log(
   "================================"
@@ -943,6 +1325,14 @@ console.log(
 
 console.log(
   "2. test"
+);
+
+console.log(
+  "💾 Saved Count: ENABLED"
+);
+
+console.log(
+  "📱 Auto QR: ENABLED"
 );
 
 console.log(

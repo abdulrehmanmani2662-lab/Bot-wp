@@ -26,6 +26,12 @@ const TARGET_GROUP_NAMES = [
   "test"
 ];
 
+/*
+========================================
+FILES
+========================================
+*/
+
 const BASE = __dirname;
 
 const AUTH_DIR = path.join(BASE, "auth");
@@ -36,12 +42,6 @@ const STATE_FILE = path.join(DATA_DIR, "botState.json");
 const GROUP_FILE = path.join(DATA_DIR, "groups.json");
 const ALL_GROUP_FILE = path.join(DATA_DIR, "allGroups.json");
 
-/*
-========================================
-CREATE DIRECTORIES
-========================================
-*/
-
 for (const dir of [AUTH_DIR, DATA_DIR]) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -50,17 +50,22 @@ for (const dir of [AUTH_DIR, DATA_DIR]) {
 
 /*
 ========================================
-JSON HELPERS
+JSON
 ========================================
 */
 
 function loadJSON(file, fallback) {
   try {
     if (fs.existsSync(file)) {
-      return JSON.parse(fs.readFileSync(file, "utf8"));
+      return JSON.parse(
+        fs.readFileSync(file, "utf8")
+      );
     }
   } catch (error) {
-    console.log("JSON load error:", error.message);
+    console.log(
+      "JSON load error:",
+      error.message
+    );
   }
 
   return fallback;
@@ -73,7 +78,10 @@ function saveJSON(file, data) {
       JSON.stringify(data, null, 2)
     );
   } catch (error) {
-    console.log("JSON save error:", error.message);
+    console.log(
+      "JSON save error:",
+      error.message
+    );
   }
 }
 
@@ -83,7 +91,10 @@ DATA
 ========================================
 */
 
-let messageLog = loadJSON(LOG_FILE, {});
+let messageLog = loadJSON(
+  LOG_FILE,
+  {}
+);
 
 let botState = loadJSON(
   STATE_FILE,
@@ -103,15 +114,30 @@ let allGroups = loadJSON(
 );
 
 function saveData() {
-  saveJSON(LOG_FILE, messageLog);
-  saveJSON(STATE_FILE, botState);
-  saveJSON(GROUP_FILE, savedGroups);
-  saveJSON(ALL_GROUP_FILE, allGroups);
+  saveJSON(
+    LOG_FILE,
+    messageLog
+  );
+
+  saveJSON(
+    STATE_FILE,
+    botState
+  );
+
+  saveJSON(
+    GROUP_FILE,
+    savedGroups
+  );
+
+  saveJSON(
+    ALL_GROUP_FILE,
+    allGroups
+  );
 }
 
 /*
 ========================================
-HELPERS
+JID HELPERS
 ========================================
 */
 
@@ -135,7 +161,7 @@ function formatNumber(jid) {
 
 /*
 ========================================
-GROUP NAME NORMALIZER
+GROUP NAME MATCHING
 ========================================
 */
 
@@ -148,14 +174,10 @@ function normalizeGroupName(name) {
     .trim();
 }
 
-/*
-========================================
-GROUP MATCHING
-========================================
-*/
-
-function groupMatches(actualName, targetName) {
-
+function groupMatches(
+  actualName,
+  targetName
+) {
   const actual =
     normalizeGroupName(actualName);
 
@@ -184,15 +206,21 @@ function groupMatches(actualName, targetName) {
   const targetCompact =
     target.replace(/\s+/g, "");
 
-  if (actualCompact === targetCompact) {
+  if (
+    actualCompact === targetCompact
+  ) {
     return true;
   }
 
-  if (actualCompact.includes(targetCompact)) {
+  if (
+    actualCompact.includes(targetCompact)
+  ) {
     return true;
   }
 
-  if (targetCompact.includes(actualCompact)) {
+  if (
+    targetCompact.includes(actualCompact)
+  ) {
     return true;
   }
 
@@ -216,20 +244,23 @@ function escapeHTML(text) {
 
 /*
 ========================================
-BOT STATE
+BOT VARIABLES
 ========================================
 */
 
 let sock = null;
+
 let ownerJid = null;
 
 let latestQR = null;
 let qrGeneratedAt = 0;
 
 let connectionStatus = "starting";
+
 let lastError = "";
 
 let reconnecting = false;
+
 let connectedAt = null;
 
 let deviceInfo = {
@@ -264,13 +295,16 @@ app.get("/", async (req, res) => {
   if (latestQR) {
     try {
       qrImage =
-        await QRCode.toDataURL(latestQR);
+        await QRCode.toDataURL(
+          latestQR
+        );
     } catch {
       qrImage = "";
     }
   }
 
-  const connected = !!ownerJid;
+  const connected =
+    !!ownerJid;
 
   const cycleStart =
     botState.cycleStart ||
@@ -334,18 +368,25 @@ app.get("/", async (req, res) => {
   let statusClass = "yellow";
 
   if (connected) {
+
     statusText = "CONNECTED";
     statusClass = "green";
+
   } else if (
     connectionStatus === "qr"
   ) {
+
     statusText = "SCAN QR";
     statusClass = "blue";
+
   } else if (
-    connectionStatus === "disconnected"
+    connectionStatus ===
+    "disconnected"
   ) {
+
     statusText = "RECONNECTING";
     statusClass = "red";
+
   }
 
   /*
@@ -363,64 +404,55 @@ app.get("/", async (req, res) => {
               );
 
             return `
-            <div class="group-card">
+<div class="group-card">
 
-              <div class="group-icon">
-                ${
-                  index === 0
-                    ? "🏢"
-                    : "🧪"
-                }
-              </div>
+  <div class="group-icon">
+    ${index === 0 ? "🏢" : "🧪"}
+  </div>
 
-              <div class="group-info">
+  <div class="group-info">
 
-                <div class="group-name">
-                  ${escapeHTML(
-                    group.name
-                  )}
-                </div>
+    <div class="group-name">
+      ${escapeHTML(group.name)}
+    </div>
 
-                <div class="group-jid">
-                  ${escapeHTML(
-                    group.jid
-                  )}
-                </div>
+    <div class="group-jid">
+      ${escapeHTML(group.jid)}
+    </div>
 
-                <div class="group-count">
-                  💬 ${count} messages
-                </div>
+    <div class="group-count">
+      💬 ${count} messages
+    </div>
 
-              </div>
+  </div>
 
-              <div class="active-badge">
-                <span></span>
-                DETECTED
-              </div>
+  <div class="active-badge">
+    <span></span>
+    DETECTED
+  </div>
 
-            </div>
-            `;
+</div>
+`;
 
           }
         ).join("")
       : `
-        <div class="empty-box">
+<div class="empty-box">
 
-          <div class="empty-icon">
-            👥
-          </div>
+  <div class="empty-icon">
+    👥
+  </div>
 
-          <b>
-            No target groups detected
-          </b>
+  <b>
+    No target groups detected
+  </b>
 
-          <small>
-            Bot har 30 seconds mein groups
-            dobara check karega.
-          </small>
+  <small>
+    Bot har 30 seconds mein groups dobara check karega.
+  </small>
 
-        </div>
-      `;
+</div>
+`;
 
   /*
   ALL GROUPS
@@ -438,48 +470,44 @@ app.get("/", async (req, res) => {
               );
 
             return `
-            <div class="all-group">
+<div class="all-group">
 
-              <div>
+  <div>
 
-                <div class="all-group-name">
-                  ${escapeHTML(
-                    group.name
-                  )}
-                </div>
+    <div class="all-group-name">
+      ${escapeHTML(group.name)}
+    </div>
 
-                <div class="all-group-jid">
-                  ${escapeHTML(
-                    group.jid
-                  )}
-                </div>
+    <div class="all-group-jid">
+      ${escapeHTML(group.jid)}
+    </div>
 
-              </div>
+  </div>
 
-              ${
-                isTarget
-                  ? `
-                    <span class="target-tag">
-                      TARGET
-                    </span>
-                  `
-                  : `
-                    <span class="normal-tag">
-                      GROUP
-                    </span>
-                  `
-              }
+  ${
+    isTarget
+      ? `
+        <span class="target-tag">
+          TARGET
+        </span>
+      `
+      : `
+        <span class="normal-tag">
+          GROUP
+        </span>
+      `
+  }
 
-            </div>
-            `;
+</div>
+`;
 
           }
         ).join("")
       : `
-        <div class="empty-box">
-          No groups loaded yet.
-        </div>
-      `;
+<div class="empty-box">
+  No groups loaded yet.
+</div>
+`;
 
   /*
   QR
@@ -488,47 +516,47 @@ app.get("/", async (req, res) => {
   const qrHTML =
     qrImage
       ? `
-        <div class="qr-container">
+<div class="qr-container">
 
-          <div class="qr-title">
-            Scan QR with WhatsApp
-          </div>
+  <div class="qr-title">
+    Scan QR with WhatsApp
+  </div>
 
-          <img
-            src="${qrImage}"
-            class="qr"
-            alt="WhatsApp QR"
-          />
+  <img
+    src="${qrImage}"
+    class="qr"
+    alt="WhatsApp QR"
+  >
 
-          <div class="qr-refresh">
-            QR automatically refreshes.
-          </div>
+  <div class="qr-refresh">
+    QR automatically refreshes.
+  </div>
 
-        </div>
-      `
+</div>
+`
       : `
-        <div class="qr-wait">
+<div class="qr-wait">
 
-          <div class="spinner"></div>
+  <div class="spinner"></div>
 
-          <h3>
-            ${
-              connected
-                ? "WhatsApp Connected"
-                : "Waiting for QR..."
-            }
-          </h3>
+  <h3>
+    ${
+      connected
+        ? "WhatsApp Connected"
+        : "Waiting for QR..."
+    }
+  </h3>
 
-          <p>
-            ${
-              connected
-                ? "Bot successfully connected."
-                : "QR generate hote hi yahan show hoga."
-            }
-          </p>
+  <p>
+    ${
+      connected
+        ? "Bot successfully connected."
+        : "QR generate hote hi yahan show hoga."
+    }
+  </p>
 
-        </div>
-      `;
+</div>
+`;
 
   const uptime =
     connectedAt
@@ -540,7 +568,7 @@ app.get("/", async (req, res) => {
   res.send(`
 <!DOCTYPE html>
 
-<html lang="en">
+<html>
 
 <head>
 
@@ -556,7 +584,9 @@ app.get("/", async (req, res) => {
   content="15"
 >
 
-<title>WhatsApp Report Bot</title>
+<title>
+WhatsApp Report Bot
+</title>
 
 <style>
 
@@ -569,7 +599,6 @@ body {
   margin: 0;
 
   font-family:
-    Inter,
     Arial,
     sans-serif;
 
@@ -622,16 +651,14 @@ body {
   border:
     1px solid
     rgba(255,255,255,.08);
-
-  backdrop-filter:
-    blur(20px);
 }
 
 .brand {
 
   display: flex;
 
-  align-items: center;
+  align-items:
+    center;
 
   gap: 15px;
 }
@@ -644,9 +671,11 @@ body {
 
   display: flex;
 
-  align-items: center;
+  align-items:
+    center;
 
-  justify-content: center;
+  justify-content:
+    center;
 
   border-radius: 17px;
 
@@ -680,7 +709,8 @@ body {
 
   display: flex;
 
-  align-items: center;
+  align-items:
+    center;
 
   gap: 8px;
 
@@ -711,22 +741,18 @@ body {
   background: #25d366;
 
   box-shadow:
-    0 0 15px
-    #25d366;
+    0 0 15px #25d366;
 }
 
 .yellow .dot {
-
   background: #ffc107;
 }
 
 .blue .dot {
-
   background: #2196f3;
 }
 
 .red .dot {
-
   background: #ff5252;
 }
 
@@ -757,7 +783,6 @@ body {
 }
 
 .stat-icon {
-
   font-size: 22px;
 }
 
@@ -812,7 +837,8 @@ body {
   justify-content:
     space-between;
 
-  align-items: center;
+  align-items:
+    center;
 
   margin-bottom: 18px;
 }
@@ -858,7 +884,6 @@ body {
 }
 
 .device-row:last-child {
-
   border-bottom: 0;
 }
 
@@ -879,7 +904,6 @@ body {
 }
 
 .online {
-
   color: #25d366;
 }
 
@@ -906,7 +930,6 @@ body {
 }
 
 .qr-container {
-
   text-align: center;
 }
 
@@ -969,8 +992,7 @@ body {
 @keyframes spin {
 
   to {
-    transform:
-      rotate(360deg);
+    transform: rotate(360deg);
   }
 
 }
@@ -986,7 +1008,8 @@ body {
 
   display: flex;
 
-  align-items: center;
+  align-items:
+    center;
 
   gap: 13px;
 
@@ -1010,9 +1033,11 @@ body {
 
   display: flex;
 
-  align-items: center;
+  align-items:
+    center;
 
-  justify-content: center;
+  justify-content:
+    center;
 
   background:
     rgba(255,255,255,.07);
@@ -1056,7 +1081,8 @@ body {
 
   display: flex;
 
-  align-items: center;
+  align-items:
+    center;
 
   gap: 5px;
 
@@ -1146,7 +1172,6 @@ body {
 }
 
 .progress-wrap {
-
   margin-top: 10px;
 }
 
@@ -1180,8 +1205,7 @@ body {
 
   height: 100%;
 
-  width:
-    ${progress}%;
+  width: ${progress}%;
 
   background:
     linear-gradient(
@@ -1235,13 +1259,11 @@ body {
 @media(max-width:850px) {
 
   .stats {
-
     grid-template-columns:
       repeat(2,1fr);
   }
 
   .grid {
-
     grid-template-columns:
       1fr;
   }
@@ -1257,17 +1279,6 @@ body {
 
     align-items:
       flex-start;
-  }
-
-  .stats {
-
-    grid-template-columns:
-      1fr 1fr;
-  }
-
-  .stat {
-
-    padding: 15px;
   }
 
 }
@@ -1598,7 +1609,8 @@ body {
 
   WhatsApp Report Bot
   • Auto Group Detection
-  • Auto 7-Day Reports
+  • !rana Report
+  • 7-Day Reports
 
 </div>
 
@@ -1662,7 +1674,9 @@ GROUP MESSAGE COUNT
 ========================================
 */
 
-function getGroupMessageCount(groupJid) {
+function getGroupMessageCount(
+  groupJid
+) {
 
   const data =
     messageLog[groupJid] || {};
@@ -1694,7 +1708,9 @@ function formatDuration(ms) {
     Math.floor(ms / 1000);
 
   const days =
-    Math.floor(seconds / 86400);
+    Math.floor(
+      seconds / 86400
+    );
 
   const hours =
     Math.floor(
@@ -1719,7 +1735,7 @@ function formatDuration(ms) {
 
 /*
 ========================================
-FIND ALL GROUPS
+FIND TARGET GROUPS
 ========================================
 */
 
@@ -1770,7 +1786,9 @@ async function findTargetGroups() {
     allGroups =
       foundAll.sort(
         (a, b) =>
-          a.name.localeCompare(b.name)
+          a.name.localeCompare(
+            b.name
+          )
       );
 
     const detected = [];
@@ -1833,46 +1851,21 @@ async function findTargetGroups() {
       savedGroups.length
     );
 
-    if (savedGroups.length) {
+    savedGroups.forEach(
+      group => {
 
-      savedGroups.forEach(
-        group => {
+        console.log(
+          "✅",
+          group.name
+        );
 
-          console.log(
-            "✅",
-            group.name
-          );
+        console.log(
+          "   JID:",
+          group.jid
+        );
 
-          console.log(
-            "   JID:",
-            group.jid
-          );
-
-        }
-      );
-
-    } else {
-
-      console.log(
-        "❌ TARGET GROUPS NOT FOUND"
-      );
-
-      console.log(
-        "Expected groups:"
-      );
-
-      TARGET_GROUP_NAMES.forEach(
-        name => {
-
-          console.log(
-            " -",
-            name
-          );
-
-        }
-      );
-
-    }
+      }
+    );
 
     console.log(
       "================================"
@@ -1893,11 +1886,13 @@ async function findTargetGroups() {
 
 /*
 ========================================
-GROUP LIST COMMAND
+GROUP LIST
 ========================================
 */
 
-async function sendGroupsList(chat) {
+async function sendGroupsList(
+  chat
+) {
 
   let text =
     "📋 *WHATSAPP GROUPS*\n\n";
@@ -1943,11 +1938,13 @@ async function sendGroupsList(chat) {
 
 /*
 ========================================
-SEND REPORT
+REPORT
 ========================================
 */
 
-async function sendReport(groupJid) {
+async function sendReport(
+  groupJid
+) {
 
   try {
 
@@ -1977,7 +1974,9 @@ async function sendReport(groupJid) {
     text +=
       `🗓 *Start:* ${
         new Date(start)
-          .toLocaleDateString("en-GB")
+          .toLocaleDateString(
+            "en-GB"
+          )
       }\n\n`;
 
     const active = [];
@@ -2038,7 +2037,9 @@ async function sendReport(groupJid) {
       ) {
 
         text +=
-          `📱 ${formatNumber(member)} — *${count}* messages\n`;
+          `📱 ${formatNumber(
+            member
+          )} — *${count}* messages\n`;
 
       }
 
@@ -2060,7 +2061,9 @@ async function sendReport(groupJid) {
       ) {
 
         text +=
-          `📱 ${formatNumber(member)} — *0* messages 🚫\n`;
+          `📱 ${formatNumber(
+            member
+          )} — *0* messages 🚫\n`;
 
       }
 
@@ -2081,7 +2084,7 @@ async function sendReport(groupJid) {
   } catch (error) {
 
     console.log(
-      "Report error:",
+      "❌ Report error:",
       error.message
     );
 
@@ -2169,7 +2172,7 @@ async function startBot() {
 
     /*
     ========================================
-    CONNECTION UPDATE
+    CONNECTION
     ========================================
     */
 
@@ -2340,7 +2343,6 @@ async function startBot() {
     /*
     ========================================
     MESSAGE LISTENER
-    LID + PHONE OWNER FIX
     ========================================
     */
 
@@ -2358,20 +2360,26 @@ async function startBot() {
           if (
             !msg ||
             !msg.message
-          ) return;
+          ) {
+            return;
+          }
 
           const chat =
             msg.key.remoteJid;
 
-          if (!chat) return;
+          if (!chat) {
+            return;
+          }
 
           if (
             !chat.endsWith("@g.us")
-          ) return;
+          ) {
+            return;
+          }
 
           /*
           ========================================
-          GET SENDER
+          SENDER INFORMATION
           ========================================
           */
 
@@ -2386,40 +2394,40 @@ async function startBot() {
 
           /*
           ========================================
-          OWNER CHECK
+          OWNER
           ========================================
           */
 
           const ownerPhone =
             ownerJid
-              ? normalizeJid(ownerJid)
+              ? normalizeJid(
+                  ownerJid
+                )
               : null;
 
           const phoneNormalized =
             senderPhone
-              ? normalizeJid(senderPhone)
+              ? normalizeJid(
+                  senderPhone
+                )
               : null;
 
-          const lidNormalized =
-            senderLid
-              ? normalizeJid(senderLid)
-              : null;
+          /*
+          fromMe = linked WhatsApp
+          */
 
           const isOwner =
+            msg.key.fromMe === true ||
             (
               ownerPhone &&
               phoneNormalized &&
-              phoneNormalized === ownerPhone
-            ) ||
-            (
-              ownerPhone &&
-              lidNormalized &&
-              lidNormalized === ownerPhone
+              phoneNormalized ===
+                ownerPhone
             );
 
           /*
           ========================================
-          MESSAGE TEXT
+          TEXT
           ========================================
           */
 
@@ -2437,43 +2445,149 @@ async function startBot() {
 
           /*
           ========================================
-          OWNER COMMANDS
+          !RANA
           ========================================
           */
 
-          if (isOwner) {
+          if (
+            command === "!rana"
+          ) {
 
-            if (
-              command === "!groups"
-            ) {
+            console.log(
+              "📊 !rana received"
+            );
 
-              await sendGroupsList(
-                chat
+            if (!isOwner) {
+
+              console.log(
+                "⛔ Unauthorized !rana:",
+                senderLid ||
+                senderPhone ||
+                "unknown"
               );
 
               return;
-
             }
 
+            if (
+              !isTargetGroup(chat)
+            ) {
+
+              console.log(
+                "⚠️ !rana used in non-target group"
+              );
+
+              return;
+            }
+
+            console.log(
+              "✅ Authorized !rana"
+            );
+
+            await sendReport(
+              chat
+            );
+
+            return;
           }
 
           /*
           ========================================
-          TARGET GROUP CHECK
+          !STATS
+          ========================================
+          */
+
+          if (
+            command === "!stats"
+          ) {
+
+            if (!isOwner) {
+
+              console.log(
+                "⛔ Unauthorized !stats:",
+                senderLid ||
+                senderPhone ||
+                "unknown"
+              );
+
+              return;
+            }
+
+            if (
+              !isTargetGroup(chat)
+            ) {
+
+              console.log(
+                "⚠️ !stats used in non-target group"
+              );
+
+              return;
+            }
+
+            console.log(
+              "✅ Authorized !stats"
+            );
+
+            await sendReport(
+              chat
+            );
+
+            return;
+          }
+
+          /*
+          ========================================
+          !GROUPS
+          ========================================
+          */
+
+          if (
+            command === "!groups"
+          ) {
+
+            if (!isOwner) {
+
+              console.log(
+                "⛔ Unauthorized !groups"
+              );
+
+              return;
+            }
+
+            await sendGroupsList(
+              chat
+            );
+
+            return;
+          }
+
+          /*
+          ========================================
+          IGNORE BOT'S OWN NORMAL MESSAGE
+          ========================================
+          */
+
+          if (
+            msg.key.fromMe
+          ) {
+            return;
+          }
+
+          /*
+          ========================================
+          TARGET GROUP ONLY
           ========================================
           */
 
           if (
             !isTargetGroup(chat)
           ) {
-
             return;
-
           }
 
           /*
           ========================================
-          BEST SENDER ID
+          SENDER
           ========================================
           */
 
@@ -2482,7 +2596,9 @@ async function startBot() {
             senderLid ||
             msg.key.remoteJid;
 
-          if (!sender) return;
+          if (!sender) {
+            return;
+          }
 
           /*
           ========================================
@@ -2494,7 +2610,8 @@ async function startBot() {
             !messageLog[chat]
           ) {
 
-            messageLog[chat] = {};
+            messageLog[chat] =
+              {};
 
           }
 
@@ -2520,43 +2637,6 @@ async function startBot() {
             );
 
           saveData();
-
-          /*
-          ========================================
-          STATS COMMAND
-          ========================================
-          */
-
-          if (
-            command !== "!stats"
-          ) {
-
-            return;
-
-          }
-
-          if (!isOwner) {
-
-            console.log(
-              "⛔ Unauthorized !stats:",
-              senderLid ||
-              senderPhone ||
-              "unknown"
-            );
-
-            return;
-
-          }
-
-          console.log(
-            "✅ Authorized !stats:",
-            senderPhone ||
-            senderLid
-          );
-
-          await sendReport(
-            chat
-          );
 
         } catch (error) {
 
@@ -2596,7 +2676,7 @@ async function startBot() {
 
 /*
 ========================================
-TARGET CHECK
+TARGET GROUP CHECK
 ========================================
 */
 
@@ -2611,7 +2691,7 @@ function isTargetGroup(jid) {
 
 /*
 ========================================
-QR WATCHDOG
+QR AUTO REFRESH
 ========================================
 */
 
@@ -2621,8 +2701,8 @@ setInterval(
     if (
       latestQR &&
       Date.now() -
-      qrGeneratedAt >
-      QR_EXPIRE
+        qrGeneratedAt >
+        QR_EXPIRE
     ) {
 
       console.log(
@@ -2663,7 +2743,7 @@ setInterval(
 
 /*
 ========================================
-AUTO GROUP RESCAN
+GROUP RESCAN
 ========================================
 */
 
@@ -2674,7 +2754,7 @@ setInterval(
       sock &&
       ownerJid &&
       connectionStatus ===
-      "connected"
+        "connected"
     ) {
 
       await findTargetGroups();
@@ -2687,7 +2767,7 @@ setInterval(
 
 /*
 ========================================
-AUTO 7-DAY REPORT
+7 DAY AUTO REPORT
 ========================================
 */
 
@@ -2699,10 +2779,10 @@ setInterval(
       const end =
         botState.cycleStart +
         REPORT_DAYS *
-        24 *
-        60 *
-        60 *
-        1000;
+          24 *
+          60 *
+          60 *
+          1000;
 
       if (
         Date.now() >= end
@@ -2791,6 +2871,10 @@ app.listen(
 
     console.log(
       "📊 7-DAY REPORT: ON"
+    );
+
+    console.log(
+      "⚡ !RANA COMMAND: ON"
     );
 
     console.log(

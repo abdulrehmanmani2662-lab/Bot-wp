@@ -15,108 +15,368 @@ const path = require("path");
 const PORT = process.env.PORT || 3000;
 const REPORT_DAYS = 7;
 
+/*
+========================================
+TARGET GROUPS
+========================================
+*/
+
 const TARGET_GROUP_NAMES = [
   "مین کور کمیٹی ہوپ لائٹ ویلفیئر آرگنائزیشن",
   "test"
 ];
 
 const BASE = __dirname;
-const AUTH_DIR = path.join(BASE, "auth");
-const DATA_DIR = path.join(BASE, "data");
 
-const LOG_FILE = path.join(DATA_DIR, "messageLog.json");
-const STATE_FILE = path.join(DATA_DIR, "botState.json");
-const GROUP_FILE = path.join(DATA_DIR, "groups.json");
+const AUTH_DIR =
+  path.join(BASE, "auth");
 
-for (const dir of [AUTH_DIR, DATA_DIR]) {
+const DATA_DIR =
+  path.join(BASE, "data");
+
+const LOG_FILE =
+  path.join(DATA_DIR, "messageLog.json");
+
+const STATE_FILE =
+  path.join(DATA_DIR, "botState.json");
+
+const GROUP_FILE =
+  path.join(DATA_DIR, "groups.json");
+
+const ALL_GROUP_FILE =
+  path.join(DATA_DIR, "allGroups.json");
+
+
+/*
+========================================
+CREATE DIRECTORIES
+========================================
+*/
+
+for (const dir of [
+  AUTH_DIR,
+  DATA_DIR
+]) {
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, {
+      recursive: true
+    });
   }
 }
+
+
+/*
+========================================
+JSON HELPERS
+========================================
+*/
 
 function loadJSON(file, fallback) {
   try {
     if (fs.existsSync(file)) {
-      return JSON.parse(fs.readFileSync(file, "utf8"));
+      return JSON.parse(
+        fs.readFileSync(
+          file,
+          "utf8"
+        )
+      );
     }
-  } catch (e) {
-    console.log("JSON load error:", e.message);
+  } catch (error) {
+    console.log(
+      "JSON load error:",
+      error.message
+    );
   }
 
   return fallback;
 }
 
-let messageLog = loadJSON(LOG_FILE, {});
 
-let botState = loadJSON(STATE_FILE, {
-  cycleStart: Date.now()
-});
-
-let savedGroups = loadJSON(GROUP_FILE, []);
-
-function saveData() {
+function saveJSON(file, data) {
   try {
     fs.writeFileSync(
-      LOG_FILE,
-      JSON.stringify(messageLog, null, 2)
+      file,
+      JSON.stringify(
+        data,
+        null,
+        2
+      )
     );
-
-    fs.writeFileSync(
-      STATE_FILE,
-      JSON.stringify(botState, null, 2)
+  } catch (error) {
+    console.log(
+      "JSON save error:",
+      error.message
     );
-
-    fs.writeFileSync(
-      GROUP_FILE,
-      JSON.stringify(savedGroups, null, 2)
-    );
-  } catch (e) {
-    console.log("Save error:", e.message);
   }
 }
 
+
+/*
+========================================
+DATA
+========================================
+*/
+
+let messageLog =
+  loadJSON(
+    LOG_FILE,
+    {}
+  );
+
+let botState =
+  loadJSON(
+    STATE_FILE,
+    {
+      cycleStart: Date.now()
+    }
+  );
+
+let savedGroups =
+  loadJSON(
+    GROUP_FILE,
+    []
+  );
+
+let allGroups =
+  loadJSON(
+    ALL_GROUP_FILE,
+    []
+  );
+
+
+function saveData() {
+
+  saveJSON(
+    LOG_FILE,
+    messageLog
+  );
+
+  saveJSON(
+    STATE_FILE,
+    botState
+  );
+
+  saveJSON(
+    GROUP_FILE,
+    savedGroups
+  );
+
+  saveJSON(
+    ALL_GROUP_FILE,
+    allGroups
+  );
+}
+
+
+/*
+========================================
+HELPERS
+========================================
+*/
+
 function normalizeJid(jid) {
+
   return String(jid || "")
     .split(":")[0]
     .toLowerCase();
+
 }
 
-function formatNumber(jid) {
-  let number = String(jid || "")
-    .split("@")[0]
-    .split(":")[0];
 
-  if (number.startsWith("92")) {
-    number = "0" + number.slice(2);
+function formatNumber(jid) {
+
+  let number =
+    String(jid || "")
+      .split("@")[0]
+      .split(":")[0];
+
+  if (
+    number.startsWith("92")
+  ) {
+    number =
+      "0" +
+      number.slice(2);
   }
 
   return number;
+
 }
+
+
+/*
+========================================
+IMPORTANT GROUP NORMALIZER
+========================================
+*/
 
 function normalizeGroupName(name) {
+
   return String(name || "")
-    .trim()
+    .normalize("NFKC")
     .toLowerCase()
-    .replace(/\s+/g, " ");
+    .replace(
+      /[\u200B-\u200D\uFEFF]/g,
+      ""
+    )
+    .replace(
+      /\s+/g,
+      " "
+    )
+    .trim();
+
 }
 
-function escapeHTML(text) {
-  return String(text || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+
+/*
+========================================
+GROUP MATCHING
+========================================
+*/
+
+function groupMatches(
+  actualName,
+  targetName
+) {
+
+  const actual =
+    normalizeGroupName(
+      actualName
+    );
+
+  const target =
+    normalizeGroupName(
+      targetName
+    );
+
+  if (!actual || !target) {
+    return false;
+  }
+
+
+  /*
+  Exact match
+  */
+
+  if (
+    actual === target
+  ) {
+    return true;
+  }
+
+
+  /*
+  Partial match
+  */
+
+  if (
+    actual.includes(target)
+  ) {
+    return true;
+  }
+
+  if (
+    target.includes(actual)
+  ) {
+    return true;
+  }
+
+
+  /*
+  Remove spaces and compare
+  */
+
+  const actualCompact =
+    actual.replace(
+      /\s+/g,
+      ""
+    );
+
+  const targetCompact =
+    target.replace(
+      /\s+/g,
+      ""
+    );
+
+  if (
+    actualCompact ===
+    targetCompact
+  ) {
+    return true;
+  }
+
+
+  if (
+    actualCompact.includes(
+      targetCompact
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    targetCompact.includes(
+      actualCompact
+    )
+  ) {
+    return true;
+  }
+
+
+  return false;
+
 }
+
+
+/*
+========================================
+HTML ESCAPE
+========================================
+*/
+
+function escapeHTML(text) {
+
+  return String(text || "")
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+    .replace(
+      /'/g,
+      "&#039;"
+    );
+
+}
+
+
+/*
+========================================
+BOT STATE
+========================================
+*/
 
 let sock = null;
 
 let ownerJid = null;
 
 let latestQR = null;
+
 let qrGeneratedAt = 0;
 
-let connectionStatus = "starting";
+let connectionStatus =
+  "starting";
+
 let lastError = "";
 
 let reconnecting = false;
@@ -124,181 +384,396 @@ let reconnecting = false;
 let connectedAt = null;
 
 let deviceInfo = {
-  platform: "Unknown",
-  device: "Unknown",
-  browser: "Unknown",
-  os: "Unknown"
+
+  platform:
+    "Unknown",
+
+  device:
+    "Unknown",
+
+  browser:
+    "Unknown",
+
+  os:
+    "Unknown"
+
 };
 
-const QR_EXPIRE = 50000;
+const QR_EXPIRE =
+  50000;
 
-const app = express();
 
-app.use(express.json());
+/*
+========================================
+EXPRESS
+========================================
+*/
 
-/* =========================
-   DASHBOARD
-========================= */
+const app =
+  express();
 
-app.get("/", async (req, res) => {
-  let qrImage = "";
+app.use(
+  express.json()
+);
 
-  if (latestQR) {
-    try {
-      qrImage = await QRCode.toDataURL(latestQR);
-    } catch (e) {
-      qrImage = "";
+
+/*
+========================================
+DASHBOARD
+========================================
+*/
+
+app.get(
+  "/",
+  async (req, res) => {
+
+    let qrImage = "";
+
+    if (latestQR) {
+
+      try {
+
+        qrImage =
+          await QRCode.toDataURL(
+            latestQR
+          );
+
+      } catch {
+        qrImage = "";
+      }
+
     }
-  }
 
-  const connected = !!ownerJid;
 
-  const cycleStart =
-    botState.cycleStart || Date.now();
+    const connected =
+      !!ownerJid;
 
-  const elapsed =
-    Math.max(0, Date.now() - cycleStart);
 
-  const totalTime =
-    REPORT_DAYS *
-    24 *
-    60 *
-    60 *
-    1000;
+    const cycleStart =
+      botState.cycleStart ||
+      Date.now();
 
-  const progress = Math.min(
-    100,
-    Math.round((elapsed / totalTime) * 100)
-  );
 
-  const daysPassed =
-    Math.floor(
-      elapsed /
-      (24 * 60 * 60 * 1000)
-    );
+    const elapsed =
+      Math.max(
+        0,
+        Date.now() -
+        cycleStart
+      );
 
-  const daysLeft =
-    Math.max(
-      0,
-      REPORT_DAYS - daysPassed
-    );
 
-  let totalMessages = 0;
+    const totalTime =
+      REPORT_DAYS *
+      24 *
+      60 *
+      60 *
+      1000;
 
-  for (const groupJid of Object.keys(messageLog)) {
-    const users = messageLog[groupJid] || {};
 
-    for (const sender of Object.keys(users)) {
-      totalMessages += users[sender].length;
-    }
-  }
-
-  let statusText = "STARTING";
-  let statusClass = "yellow";
-
-  if (connected) {
-    statusText = "CONNECTED";
-    statusClass = "green";
-  } else if (connectionStatus === "qr") {
-    statusText = "SCAN QR";
-    statusClass = "blue";
-  } else if (
-    connectionStatus === "disconnected"
-  ) {
-    statusText = "RECONNECTING";
-    statusClass = "red";
-  }
-
-  const groupsHTML =
-    savedGroups.length > 0
-      ? savedGroups
-          .map(
-            (group, index) => `
-        <div class="group-card">
-
-          <div class="group-icon">
-            ${index === 0 ? "🏢" : "🧪"}
-          </div>
-
-          <div class="group-info">
-
-            <div class="group-name">
-              ${escapeHTML(group.name)}
-            </div>
-
-            <div class="group-jid">
-              ${escapeHTML(group.jid)}
-            </div>
-
-          </div>
-
-          <div class="active-badge">
-            <span></span>
-            ACTIVE
-          </div>
-
-        </div>
-      `
-          )
-          .join("")
-      : `
-        <div class="empty-box">
-          <div class="empty-icon">👥</div>
-          <b>No target groups detected</b>
-          <small>
-            WhatsApp connect hone ke baad groups automatically detect honge.
-          </small>
-        </div>
-      `;
-
-  const qrHTML = qrImage
-    ? `
-      <div class="qr-container">
-
-        <div class="qr-title">
-          Scan QR with WhatsApp
-        </div>
-
-        <img
-          src="${qrImage}"
-          class="qr"
-          alt="WhatsApp QR"
-        />
-
-        <div class="qr-refresh">
-          QR automatically refresh hota rahega.
-        </div>
-
-      </div>
-    `
-    : `
-      <div class="qr-wait">
-
-        <div class="spinner"></div>
-
-        <h3>
-          ${connected
-            ? "WhatsApp Connected"
-            : "Waiting for QR..."}
-        </h3>
-
-        <p>
-          ${connected
-            ? "Bot successfully connected."
-            : "QR generate hote hi yahan show hoga."}
-        </p>
-
-      </div>
-    `;
-
-  const uptime =
-    connectedAt
-      ? formatDuration(
-          Date.now() - connectedAt
+    const progress =
+      Math.min(
+        100,
+        Math.round(
+          (
+            elapsed /
+            totalTime
+          ) *
+          100
         )
-      : "Offline";
+      );
 
-  res.send(`
+
+    const daysPassed =
+      Math.floor(
+        elapsed /
+        (
+          24 *
+          60 *
+          60 *
+          1000
+        )
+      );
+
+
+    const daysLeft =
+      Math.max(
+        0,
+        REPORT_DAYS -
+        daysPassed
+      );
+
+
+    let totalMessages = 0;
+
+
+    for (
+      const groupJid
+      of Object.keys(
+        messageLog
+      )
+    ) {
+
+      const users =
+        messageLog[groupJid] ||
+        {};
+
+
+      for (
+        const sender
+        of Object.keys(users)
+      ) {
+
+        totalMessages +=
+          users[sender].length;
+
+      }
+
+    }
+
+
+    let statusText =
+      "STARTING";
+
+    let statusClass =
+      "yellow";
+
+
+    if (connected) {
+
+      statusText =
+        "CONNECTED";
+
+      statusClass =
+        "green";
+
+    } else if (
+      connectionStatus === "qr"
+    ) {
+
+      statusText =
+        "SCAN QR";
+
+      statusClass =
+        "blue";
+
+    } else if (
+      connectionStatus ===
+      "disconnected"
+    ) {
+
+      statusText =
+        "RECONNECTING";
+
+      statusClass =
+        "red";
+
+    }
+
+
+    /*
+    ========================================
+    TARGET GROUP CARDS
+    ========================================
+    */
+
+    const groupsHTML =
+      savedGroups.length
+        ? savedGroups
+            .map(
+              (group, index) => {
+
+                const count =
+                  getGroupMessageCount(
+                    group.jid
+                  );
+
+                return `
+                <div class="group-card">
+
+                  <div class="group-icon">
+                    ${
+                      index === 0
+                        ? "🏢"
+                        : "🧪"
+                    }
+                  </div>
+
+                  <div class="group-info">
+
+                    <div class="group-name">
+                      ${escapeHTML(
+                        group.name
+                      )}
+                    </div>
+
+                    <div class="group-jid">
+                      ${escapeHTML(
+                        group.jid
+                      )}
+                    </div>
+
+                    <div class="group-count">
+                      💬 ${count} messages
+                    </div>
+
+                  </div>
+
+                  <div class="active-badge">
+                    <span></span>
+                    DETECTED
+                  </div>
+
+                </div>
+                `;
+
+              }
+            )
+            .join("")
+        : `
+          <div class="empty-box">
+
+            <div class="empty-icon">
+              👥
+            </div>
+
+            <b>
+              No target groups detected
+            </b>
+
+            <small>
+              Bot har 30 seconds mein groups
+              dobara check karega.
+            </small>
+
+          </div>
+        `;
+
+
+    /*
+    ========================================
+    ALL GROUPS
+    ========================================
+    */
+
+    const allGroupsHTML =
+      allGroups.length
+        ? allGroups
+            .map(
+              group => {
+
+                const isTarget =
+                  savedGroups.some(
+                    g =>
+                      g.jid ===
+                      group.jid
+                  );
+
+                return `
+                <div class="all-group">
+
+                  <div>
+                    <div class="all-group-name">
+                      ${escapeHTML(
+                        group.name
+                      )}
+                    </div>
+
+                    <div class="all-group-jid">
+                      ${escapeHTML(
+                        group.jid
+                      )}
+                    </div>
+                  </div>
+
+                  ${
+                    isTarget
+                      ? `
+                        <span class="target-tag">
+                          TARGET
+                        </span>
+                      `
+                      : `
+                        <span class="normal-tag">
+                          GROUP
+                        </span>
+                      `
+                  }
+
+                </div>
+                `;
+
+              }
+            )
+            .join("")
+        : `
+          <div class="empty-box">
+            No groups loaded yet.
+          </div>
+        `;
+
+
+    /*
+    ========================================
+    QR
+    ========================================
+    */
+
+    const qrHTML =
+      qrImage
+        ? `
+          <div class="qr-container">
+
+            <div class="qr-title">
+              Scan QR with WhatsApp
+            </div>
+
+            <img
+              src="${qrImage}"
+              class="qr"
+              alt="WhatsApp QR"
+            />
+
+            <div class="qr-refresh">
+              QR automatically refreshes.
+            </div>
+
+          </div>
+        `
+        : `
+          <div class="qr-wait">
+
+            <div class="spinner"></div>
+
+            <h3>
+              ${
+                connected
+                  ? "WhatsApp Connected"
+                  : "Waiting for QR..."
+              }
+            </h3>
+
+            <p>
+              ${
+                connected
+                  ? "Bot successfully connected."
+                  : "QR generate hote hi yahan show hoga."
+              }
+            </p>
+
+          </div>
+        `;
+
+
+    const uptime =
+      connectedAt
+        ? formatDuration(
+            Date.now() -
+            connectedAt
+          )
+        : "Offline";
+
+
+    res.send(`
 <!DOCTYPE html>
 
 <html lang="en">
@@ -314,10 +789,13 @@ app.get("/", async (req, res) => {
 
 <meta
   http-equiv="refresh"
-  content="10"
+  content="15"
 >
 
-<title>WhatsApp Report Bot</title>
+<title>
+WhatsApp Report Bot
+</title>
+
 
 <style>
 
@@ -326,69 +804,94 @@ app.get("/", async (req, res) => {
 }
 
 body {
+
   margin: 0;
+
   font-family:
     Inter,
     Arial,
     sans-serif;
 
+  color: white;
+
+  min-height: 100vh;
+
   background:
     radial-gradient(
       circle at top left,
-      #18223c,
-      #080b14 45%,
-      #05070d
+      #192542,
+      #080b14 48%,
+      #04060b
     );
 
-  color: #ffffff;
-  min-height: 100vh;
 }
 
 .container {
+
   width: 94%;
+
   max-width: 1250px;
+
   margin: auto;
-  padding: 25px 0 50px;
+
+  padding:
+    25px 0 50px;
+
 }
 
+
 .header {
+
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+
+  justify-content:
+    space-between;
+
+  align-items:
+    center;
+
   gap: 20px;
 
   padding: 22px;
 
-  border: 1px solid
-    rgba(255,255,255,.08);
+  margin-bottom: 20px;
+
+  border-radius: 24px;
 
   background:
-    rgba(255,255,255,.04);
+    rgba(255,255,255,.045);
+
+  border:
+    1px solid
+    rgba(255,255,255,.08);
 
   backdrop-filter:
     blur(20px);
 
-  border-radius: 24px;
-
-  margin-bottom: 22px;
-
-  box-shadow:
-    0 20px 60px
-    rgba(0,0,0,.25);
 }
+
 
 .brand {
+
   display: flex;
+
   align-items: center;
+
   gap: 15px;
+
 }
 
+
 .logo {
+
   width: 55px;
+
   height: 55px;
 
   display: flex;
+
   align-items: center;
+
   justify-content: center;
 
   border-radius: 17px;
@@ -402,28 +905,39 @@ body {
       #128c7e
     );
 
-  box-shadow:
-    0 10px 30px
-    rgba(37,211,102,.25);
 }
+
 
 .brand h1 {
+
   margin: 0;
+
   font-size: 22px;
+
 }
+
 
 .brand p {
+
   margin: 5px 0 0;
+
   color: #8993a8;
+
   font-size: 13px;
+
 }
 
+
 .status {
+
   display: flex;
+
   align-items: center;
+
   gap: 8px;
 
-  padding: 10px 15px;
+  padding:
+    10px 15px;
 
   border-radius: 50px;
 
@@ -431,45 +945,71 @@ body {
     rgba(255,255,255,.05);
 
   font-size: 12px;
+
   font-weight: bold;
+
 }
+
 
 .dot {
+
   width: 9px;
+
   height: 9px;
+
   border-radius: 50%;
+
 }
+
 
 .green .dot {
+
   background: #25d366;
+
   box-shadow:
-    0 0 15px #25d366;
+    0 0 15px
+    #25d366;
+
 }
+
 
 .yellow .dot {
+
   background: #ffc107;
+
 }
+
 
 .blue .dot {
+
   background: #2196f3;
+
 }
+
 
 .red .dot {
+
   background: #ff5252;
+
 }
 
+
 .stats {
+
   display: grid;
 
   grid-template-columns:
-    repeat(4, 1fr);
+    repeat(4,1fr);
 
   gap: 15px;
 
   margin-bottom: 20px;
+
 }
 
+
 .stat {
+
   padding: 20px;
 
   border-radius: 20px;
@@ -481,39 +1021,52 @@ body {
     1px solid
     rgba(255,255,255,.07);
 
-  transition: .2s;
 }
 
-.stat:hover {
-  transform: translateY(-3px);
-}
 
 .stat-icon {
+
   font-size: 22px;
+
 }
+
 
 .stat-title {
+
   margin-top: 12px;
+
   color: #8e99ae;
+
   font-size: 12px;
+
 }
+
 
 .stat-value {
+
   margin-top: 5px;
+
   font-size: 23px;
+
   font-weight: 800;
+
 }
 
+
 .grid {
+
   display: grid;
 
   grid-template-columns:
-    1.25fr .75fr;
+    1.2fr .8fr;
 
   gap: 20px;
+
 }
 
+
 .card {
+
   padding: 22px;
 
   border-radius: 24px;
@@ -525,30 +1078,45 @@ body {
     1px solid
     rgba(255,255,255,.07);
 
-  box-shadow:
-    0 20px 50px
-    rgba(0,0,0,.15);
+  margin-bottom: 20px;
+
 }
 
+
 .card-title {
+
   display: flex;
-  justify-content: space-between;
+
+  justify-content:
+    space-between;
+
   align-items: center;
 
   margin-bottom: 18px;
+
 }
+
 
 .card-title h2 {
+
   margin: 0;
+
   font-size: 17px;
+
 }
+
 
 .card-title span {
+
   color: #8993a8;
-  font-size: 12px;
+
+  font-size: 11px;
+
 }
 
+
 .device {
+
   padding: 18px;
 
   border-radius: 18px;
@@ -556,39 +1124,63 @@ body {
   background:
     rgba(0,0,0,.20);
 
-  margin-bottom: 10px;
 }
 
+
 .device-row {
+
   display: flex;
-  justify-content: space-between;
+
+  justify-content:
+    space-between;
+
+  gap: 15px;
 
   padding: 9px 0;
 
   border-bottom:
     1px solid
     rgba(255,255,255,.06);
+
 }
+
 
 .device-row:last-child {
+
   border-bottom: 0;
+
 }
+
 
 .device-label {
+
   color: #8993a8;
+
   font-size: 12px;
+
 }
+
 
 .device-value {
+
   font-size: 13px;
+
   font-weight: 600;
+
+  text-align: right;
+
 }
+
 
 .online {
+
   color: #25d366;
+
 }
 
+
 .notice {
+
   margin-top: 15px;
 
   padding: 13px;
@@ -607,41 +1199,65 @@ body {
   font-size: 11px;
 
   line-height: 1.6;
+
 }
+
 
 .qr-container {
+
   text-align: center;
+
 }
+
 
 .qr-title {
+
   color: #b9c2d4;
+
   margin-bottom: 15px;
+
 }
 
+
 .qr {
+
   width: 250px;
+
   max-width: 100%;
 
-  border-radius: 18px;
+  padding: 10px;
 
   background: white;
 
-  padding: 10px;
+  border-radius: 18px;
+
 }
+
 
 .qr-refresh {
+
   color: #7f8a9e;
+
   font-size: 11px;
+
   margin-top: 12px;
+
 }
+
 
 .qr-wait {
+
   text-align: center;
+
   padding: 35px 10px;
+
 }
 
+
 .spinner {
+
   width: 40px;
+
   height: 40px;
 
   margin: auto;
@@ -656,26 +1272,35 @@ body {
 
   animation:
     spin 1s linear infinite;
+
 }
+
 
 @keyframes spin {
+
   to {
-    transform: rotate(360deg);
+    transform:
+      rotate(360deg);
   }
+
 }
 
-.qr-wait h3 {
-  margin-bottom: 5px;
-}
 
 .qr-wait p {
+
   color: #7f8a9e;
+
   font-size: 12px;
+
 }
 
+
 .group-card {
+
   display: flex;
+
   align-items: center;
+
   gap: 13px;
 
   padding: 14px;
@@ -686,80 +1311,206 @@ body {
 
   background:
     rgba(0,0,0,.18);
+
 }
 
+
 .group-icon {
+
   width: 43px;
+
   height: 43px;
 
   border-radius: 13px;
 
   display: flex;
+
   align-items: center;
+
   justify-content: center;
 
   background:
     rgba(255,255,255,.07);
 
   font-size: 20px;
+
 }
+
 
 .group-info {
+
   min-width: 0;
+
   flex: 1;
+
 }
+
 
 .group-name {
+
   font-size: 13px;
+
   font-weight: 700;
 
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
+
 
 .group-jid {
+
   color: #69758b;
-  font-size: 10px;
+
+  font-size: 9px;
 
   margin-top: 4px;
+
 }
 
+
+.group-count {
+
+  color: #7f8a9e;
+
+  font-size: 10px;
+
+  margin-top: 5px;
+
+}
+
+
 .active-badge {
+
   display: flex;
+
   align-items: center;
+
   gap: 5px;
 
   color: #25d366;
 
   font-size: 9px;
+
   font-weight: 800;
+
 }
 
+
 .active-badge span {
+
   width: 6px;
+
   height: 6px;
 
   border-radius: 50%;
 
   background: #25d366;
+
 }
 
-.progress-wrap {
-  margin-top: 10px;
-}
 
-.progress-info {
+.all-group {
+
   display: flex;
-  justify-content: space-between;
 
-  font-size: 11px;
-  color: #8b96aa;
+  justify-content:
+    space-between;
+
+  align-items:
+    center;
+
+  gap: 10px;
+
+  padding: 12px;
 
   margin-bottom: 8px;
+
+  border-radius: 14px;
+
+  background:
+    rgba(0,0,0,.16);
+
 }
 
+
+.all-group-name {
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+}
+
+
+.all-group-jid {
+
+  color: #667187;
+
+  font-size: 9px;
+
+  margin-top: 4px;
+
+}
+
+
+.target-tag,
+.normal-tag {
+
+  padding:
+    5px 8px;
+
+  border-radius: 8px;
+
+  font-size: 8px;
+
+  font-weight: bold;
+
+}
+
+
+.target-tag {
+
+  color: #25d366;
+
+  background:
+    rgba(37,211,102,.10);
+
+}
+
+
+.normal-tag {
+
+  color: #7f8a9e;
+
+  background:
+    rgba(255,255,255,.05);
+
+}
+
+
+.progress-wrap {
+
+  margin-top: 10px;
+
+}
+
+
+.progress-info {
+
+  display: flex;
+
+  justify-content:
+    space-between;
+
+  color: #8b96aa;
+
+  font-size: 11px;
+
+  margin-bottom: 8px;
+
+}
+
+
 .progress {
+
   height: 8px;
 
   background:
@@ -768,12 +1519,16 @@ body {
   border-radius: 20px;
 
   overflow: hidden;
+
 }
 
+
 .progress-bar {
+
   height: 100%;
 
-  width: ${progress}%;
+  width:
+    ${progress}%;
 
   background:
     linear-gradient(
@@ -782,68 +1537,102 @@ body {
       #6ee7b7
     );
 
-  border-radius: 20px;
 }
 
+
 .empty-box {
+
   text-align: center;
 
   padding: 30px;
 
   color: #8893a8;
+
 }
+
 
 .empty-icon {
+
   font-size: 35px;
+
   margin-bottom: 10px;
+
 }
+
 
 .empty-box b {
+
   display: block;
+
   color: white;
+
 }
+
 
 .empty-box small {
+
   display: block;
+
   margin-top: 7px;
+
 }
 
+
 .footer {
+
   text-align: center;
 
   color: #5d687b;
 
   font-size: 11px;
 
-  margin-top: 25px;
+  margin-top: 5px;
+
 }
 
-@media(max-width: 850px) {
+
+@media(max-width:850px) {
 
   .stats {
+
     grid-template-columns:
-      repeat(2, 1fr);
+      repeat(2,1fr);
+
   }
 
   .grid {
-    grid-template-columns: 1fr;
+
+    grid-template-columns:
+      1fr;
+
   }
 
 }
 
-@media(max-width: 500px) {
+
+@media(max-width:500px) {
 
   .header {
-    align-items: flex-start;
-    flex-direction: column;
+
+    flex-direction:
+      column;
+
+    align-items:
+      flex-start;
+
   }
 
   .stats {
-    grid-template-columns: 1fr 1fr;
+
+    grid-template-columns:
+      1fr 1fr;
+
   }
 
   .stat {
+
     padding: 15px;
+
   }
 
 }
@@ -852,242 +1641,354 @@ body {
 
 </head>
 
+
 <body>
 
 <div class="container">
 
-  <div class="header">
 
-    <div class="brand">
+<div class="header">
 
-      <div class="logo">
-        💬
-      </div>
+  <div class="brand">
 
-      <div>
-        <h1>WhatsApp Report Bot</h1>
-        <p>
-          7-Day Group Monitoring System
-        </p>
-      </div>
-
+    <div class="logo">
+      💬
     </div>
-
-    <div class="status ${statusClass}">
-      <span class="dot"></span>
-      ${statusText}
-    </div>
-
-  </div>
-
-
-  <div class="stats">
-
-    <div class="stat">
-      <div class="stat-icon">📱</div>
-      <div class="stat-title">
-        WHATSAPP
-      </div>
-      <div class="stat-value">
-        ${connected ? "Online" : "Offline"}
-      </div>
-    </div>
-
-    <div class="stat">
-      <div class="stat-icon">👥</div>
-      <div class="stat-title">
-        TARGET GROUPS
-      </div>
-      <div class="stat-value">
-        ${savedGroups.length}/2
-      </div>
-    </div>
-
-    <div class="stat">
-      <div class="stat-icon">💬</div>
-      <div class="stat-title">
-        MESSAGES
-      </div>
-      <div class="stat-value">
-        ${totalMessages}
-      </div>
-    </div>
-
-    <div class="stat">
-      <div class="stat-icon">⏱️</div>
-      <div class="stat-title">
-        UPTIME
-      </div>
-      <div class="stat-value">
-        ${uptime}
-      </div>
-    </div>
-
-  </div>
-
-
-  <div class="grid">
 
     <div>
 
-      <div class="card">
+      <h1>
+        WhatsApp Report Bot
+      </h1>
 
-        <div class="card-title">
-          <h2>📱 Linked WhatsApp Device</h2>
-          <span>LIVE</span>
-        </div>
-
-        <div class="device">
-
-          <div class="device-row">
-            <span class="device-label">
-              Status
-            </span>
-
-            <span class="device-value online">
-              ${connected ? "● Connected" : "● " + statusText}
-            </span>
-          </div>
-
-          <div class="device-row">
-            <span class="device-label">
-              WhatsApp Number
-            </span>
-
-            <span class="device-value">
-              ${
-                ownerJid
-                  ? escapeHTML(
-                      formatNumber(ownerJid)
-                    )
-                  : "Not linked"
-              }
-            </span>
-          </div>
-
-          <div class="device-row">
-            <span class="device-label">
-              Platform
-            </span>
-
-            <span class="device-value">
-              ${escapeHTML(deviceInfo.platform)}
-            </span>
-          </div>
-
-          <div class="device-row">
-            <span class="device-label">
-              Device
-            </span>
-
-            <span class="device-value">
-              ${escapeHTML(deviceInfo.device)}
-            </span>
-          </div>
-
-          <div class="device-row">
-            <span class="device-label">
-              OS
-            </span>
-
-            <span class="device-value">
-              ${escapeHTML(deviceInfo.os)}
-            </span>
-          </div>
-
-          <div class="device-row">
-            <span class="device-label">
-              Browser / Client
-            </span>
-
-            <span class="device-value">
-              ${escapeHTML(deviceInfo.browser)}
-            </span>
-          </div>
-
-        </div>
-
-        <div class="notice">
-          🔒 Linked WhatsApp device ka public IP aur
-          exact country Baileys/WhatsApp session se
-          reliably available nahi hota, is liye panel
-          fake IP/country show nahi karta.
-        </div>
-
-      </div>
-
-
-      <div class="card" style="margin-top:20px">
-
-        <div class="card-title">
-          <h2>👥 Target Groups</h2>
-          <span>
-            ${savedGroups.length}/2 ACTIVE
-          </span>
-        </div>
-
-        ${groupsHTML}
-
-      </div>
-
-    </div>
-
-
-    <div>
-
-      <div class="card">
-
-        <div class="card-title">
-          <h2>🔐 WhatsApp QR</h2>
-          <span>AUTO REFRESH</span>
-        </div>
-
-        ${qrHTML}
-
-      </div>
-
-
-      <div class="card" style="margin-top:20px">
-
-        <div class="card-title">
-          <h2>📊 7-Day Cycle</h2>
-          <span>
-            ${daysLeft} DAYS LEFT
-          </span>
-        </div>
-
-        <div class="progress-wrap">
-
-          <div class="progress-info">
-
-            <span>
-              ${progress}% completed
-            </span>
-
-            <span>
-              ${REPORT_DAYS} days
-            </span>
-
-          </div>
-
-          <div class="progress">
-
-            <div class="progress-bar"></div>
-
-          </div>
-
-        </div>
-
-      </div>
+      <p>
+        7-Day Group Monitoring System
+      </p>
 
     </div>
 
   </div>
 
 
-  <div class="footer">
-    WhatsApp Report Bot • Auto Monitoring • Auto 7-Day Reports
+  <div class="status ${statusClass}">
+
+    <span class="dot"></span>
+
+    ${statusText}
+
   </div>
+
+</div>
+
+
+<div class="stats">
+
+  <div class="stat">
+
+    <div class="stat-icon">
+      📱
+    </div>
+
+    <div class="stat-title">
+      WHATSAPP
+    </div>
+
+    <div class="stat-value">
+      ${connected
+        ? "Online"
+        : "Offline"}
+    </div>
+
+  </div>
+
+
+  <div class="stat">
+
+    <div class="stat-icon">
+      👥
+    </div>
+
+    <div class="stat-title">
+      TARGET GROUPS
+    </div>
+
+    <div class="stat-value">
+      ${savedGroups.length}/2
+    </div>
+
+  </div>
+
+
+  <div class="stat">
+
+    <div class="stat-icon">
+      💬
+    </div>
+
+    <div class="stat-title">
+      MESSAGES
+    </div>
+
+    <div class="stat-value">
+      ${totalMessages}
+    </div>
+
+  </div>
+
+
+  <div class="stat">
+
+    <div class="stat-icon">
+      ⏱️
+    </div>
+
+    <div class="stat-title">
+      UPTIME
+    </div>
+
+    <div class="stat-value">
+      ${uptime}
+    </div>
+
+  </div>
+
+</div>
+
+
+<div class="grid">
+
+
+<div>
+
+
+<div class="card">
+
+  <div class="card-title">
+
+    <h2>
+      📱 Linked WhatsApp Device
+    </h2>
+
+    <span>
+      LIVE
+    </span>
+
+  </div>
+
+
+  <div class="device">
+
+    <div class="device-row">
+
+      <span class="device-label">
+        Status
+      </span>
+
+      <span class="device-value online">
+        ${connected
+          ? "● Connected"
+          : "● " + statusText}
+      </span>
+
+    </div>
+
+
+    <div class="device-row">
+
+      <span class="device-label">
+        WhatsApp Number
+      </span>
+
+      <span class="device-value">
+        ${
+          ownerJid
+            ? escapeHTML(
+                formatNumber(
+                  ownerJid
+                )
+              )
+            : "Not linked"
+        }
+      </span>
+
+    </div>
+
+
+    <div class="device-row">
+
+      <span class="device-label">
+        Platform
+      </span>
+
+      <span class="device-value">
+        ${escapeHTML(
+          deviceInfo.platform
+        )}
+      </span>
+
+    </div>
+
+
+    <div class="device-row">
+
+      <span class="device-label">
+        Device
+      </span>
+
+      <span class="device-value">
+        ${escapeHTML(
+          deviceInfo.device
+        )}
+      </span>
+
+    </div>
+
+
+    <div class="device-row">
+
+      <span class="device-label">
+        Browser
+      </span>
+
+      <span class="device-value">
+        ${escapeHTML(
+          deviceInfo.browser
+        )}
+      </span>
+
+    </div>
+
+  </div>
+
+
+  <div class="notice">
+
+    🔒 WhatsApp linked device ka
+    public IP/country Baileys session
+    se reliably available nahi hota.
+
+  </div>
+
+</div>
+
+
+<div class="card">
+
+  <div class="card-title">
+
+    <h2>
+      👥 Target Groups
+    </h2>
+
+    <span>
+      ${savedGroups.length}/2 DETECTED
+    </span>
+
+  </div>
+
+  ${groupsHTML}
+
+</div>
+
+
+</div>
+
+
+<div>
+
+
+<div class="card">
+
+  <div class="card-title">
+
+    <h2>
+      🔐 WhatsApp QR
+    </h2>
+
+    <span>
+      AUTO REFRESH
+    </span>
+
+  </div>
+
+  ${qrHTML}
+
+</div>
+
+
+<div class="card">
+
+  <div class="card-title">
+
+    <h2>
+      📋 All WhatsApp Groups
+    </h2>
+
+    <span>
+      ${allGroups.length} FOUND
+    </span>
+
+  </div>
+
+  ${allGroupsHTML}
+
+</div>
+
+
+<div class="card">
+
+  <div class="card-title">
+
+    <h2>
+      📊 7-Day Cycle
+    </h2>
+
+    <span>
+      ${daysLeft} DAYS LEFT
+    </span>
+
+  </div>
+
+
+  <div class="progress-wrap">
+
+    <div class="progress-info">
+
+      <span>
+        ${progress}% completed
+      </span>
+
+      <span>
+        ${REPORT_DAYS} days
+      </span>
+
+    </div>
+
+
+    <div class="progress">
+
+      <div class="progress-bar"></div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+</div>
+
+</div>
+
+
+<div class="footer">
+
+  WhatsApp Report Bot
+  • Auto Group Detection
+  • Auto 7-Day Reports
+
+</div>
+
 
 </div>
 
@@ -1095,222 +1996,439 @@ body {
 
 </html>
 `);
-});
+
+  }
+);
 
 
-/* =========================
-   HEALTH API
-========================= */
+/*
+========================================
+HEALTH
+========================================
+*/
 
-app.get("/health", (req, res) => {
+app.get(
+  "/health",
+  (req, res) => {
 
-  res.json({
+    res.json({
 
-    status: "ok",
+      status:
+        "ok",
 
-    whatsapp:
-      ownerJid
-        ? "connected"
-        : connectionStatus,
+      whatsapp:
+        ownerJid
+          ? "connected"
+          : connectionStatus,
 
-    owner:
-      ownerJid || null,
+      owner:
+        ownerJid || null,
 
-    number:
-      ownerJid
-        ? formatNumber(ownerJid)
-        : null,
+      number:
+        ownerJid
+          ? formatNumber(
+              ownerJid
+            )
+          : null,
 
-    groups:
-      savedGroups.length,
+      targetGroups:
+        savedGroups,
 
-    qr:
-      latestQR
-        ? "available"
-        : "waiting",
+      allGroups:
+        allGroups.length,
 
-    device: deviceInfo,
+      qr:
+        latestQR
+          ? "available"
+          : "waiting",
 
-    uptime:
-      connectedAt
-        ? formatDuration(
-            Date.now() - connectedAt
-          )
-        : "offline",
+      device:
+        deviceInfo,
 
-    lastError:
-      lastError || null
+      lastError:
+        lastError || null
 
-  });
+    });
 
-});
+  }
+);
 
 
-/* =========================
-   HELPERS
-========================= */
+/*
+========================================
+GROUP MESSAGE COUNT
+========================================
+*/
+
+function getGroupMessageCount(
+  groupJid
+) {
+
+  const data =
+    messageLog[groupJid] ||
+    {};
+
+  let total = 0;
+
+  for (
+    const sender
+    of Object.keys(data)
+  ) {
+
+    total +=
+      data[sender].length;
+
+  }
+
+  return total;
+
+}
+
+
+/*
+========================================
+DURATION
+========================================
+*/
 
 function formatDuration(ms) {
 
-  const totalSeconds =
-    Math.floor(ms / 1000);
+  const seconds =
+    Math.floor(
+      ms / 1000
+    );
 
   const days =
     Math.floor(
-      totalSeconds / 86400
+      seconds / 86400
     );
 
   const hours =
     Math.floor(
-      (totalSeconds % 86400) / 3600
+      (seconds % 86400) /
+      3600
     );
 
   const minutes =
     Math.floor(
-      (totalSeconds % 3600) / 60
+      (seconds % 3600) /
+      60
     );
 
+
   if (days > 0) {
-    return `${days}d ${hours}h`;
+
+    return (
+      `${days}d ${hours}h`
+    );
+
   }
+
 
   if (hours > 0) {
-    return `${hours}h ${minutes}m`;
+
+    return (
+      `${hours}h ${minutes}m`
+    );
+
   }
 
-  return `${minutes}m`;
+
+  return (
+    `${minutes}m`
+  );
+
 }
 
 
-/* =========================
-   FIND TARGET GROUPS
-========================= */
+/*
+========================================
+FIND ALL GROUPS
+========================================
+*/
 
 async function findTargetGroups() {
 
-  if (!sock) return;
+  if (!sock) {
+
+    console.log(
+      "⚠️ Socket not ready"
+    );
+
+    return;
+
+  }
+
 
   try {
+
+    console.log(
+      "🔍 Scanning WhatsApp groups..."
+    );
+
 
     const groups =
       await sock.groupFetchAllParticipating();
 
-    const found = [];
 
-    for (const jid of Object.keys(groups)) {
+    const foundAll = [];
 
-      const group = groups[jid];
 
-      const groupName =
-        group.subject || "";
+    for (
+      const jid
+      of Object.keys(groups)
+    ) {
 
-      const normalized =
-        normalizeGroupName(groupName);
+      const group =
+        groups[jid];
 
-      for (
-        const targetName
-        of TARGET_GROUP_NAMES
+
+      if (!group) continue;
+
+
+      const name =
+        String(
+          group.subject ||
+          ""
+        ).trim();
+
+
+      if (!name) continue;
+
+
+      foundAll.push({
+
+        jid,
+
+        name
+
+      });
+
+    }
+
+
+    /*
+    SAVE ALL GROUPS
+    */
+
+    allGroups =
+      foundAll.sort(
+        (a, b) =>
+          a.name.localeCompare(
+            b.name
+          )
+      );
+
+
+    /*
+    FIND TARGETS
+    */
+
+    const detected = [];
+
+
+    for (
+      const targetName
+      of TARGET_GROUP_NAMES
+    ) {
+
+      let match =
+        foundAll.find(
+          group =>
+            groupMatches(
+              group.name,
+              targetName
+            )
+        );
+
+
+      /*
+      If multiple possible
+      matches, take first.
+      */
+
+      if (
+        match &&
+        !detected.some(
+          g =>
+            g.jid ===
+            match.jid
+        )
       ) {
 
-        if (
-          normalized ===
-          normalizeGroupName(targetName)
-        ) {
+        detected.push({
 
-          if (
-            !found.some(
-              g => g.jid === jid
-            )
-          ) {
+          jid:
+            match.jid,
 
-            found.push({
-              jid,
-              name: groupName
-            });
+          name:
+            match.name,
 
-          }
+          target:
+            targetName
 
-        }
+        });
 
       }
 
     }
 
+
     savedGroups =
-      found.slice(0, 2);
+      detected.slice(0, 2);
+
 
     saveData();
 
-    console.log(
-      "🎯 Target groups:",
-      savedGroups
-    );
-
-  } catch (e) {
 
     console.log(
-      "Group detection error:",
-      e.message
+      "================================"
     );
+
+    console.log(
+      "📋 TOTAL GROUPS FOUND:",
+      allGroups.length
+    );
+
+    console.log(
+      "🎯 TARGET GROUPS FOUND:",
+      savedGroups.length
+    );
+
+
+    if (
+      savedGroups.length
+    ) {
+
+      savedGroups.forEach(
+        group => {
+
+          console.log(
+            "✅",
+            group.name
+          );
+
+          console.log(
+            "   JID:",
+            group.jid
+          );
+
+        }
+      );
+
+    } else {
+
+      console.log(
+        "❌ TARGET GROUPS NOT FOUND"
+      );
+
+      console.log(
+        "Expected groups:"
+      );
+
+      TARGET_GROUP_NAMES.forEach(
+        name => {
+
+          console.log(
+            " -",
+            name
+          );
+
+        }
+      );
+
+    }
+
+
+    console.log(
+      "================================"
+    );
+
+
+  } catch (error) {
+
+    console.log(
+      "❌ Group detection error:",
+      error.message
+    );
+
+    lastError =
+      error.message;
 
   }
 
 }
 
 
-/* =========================
-   CHECK TARGET GROUP
-========================= */
+/*
+========================================
+GROUP LIST COMMAND
+========================================
+*/
 
-function isTargetGroup(jid) {
-
-  return savedGroups.some(
-    group => group.jid === jid
-  );
-
-}
-
-
-/* =========================
-   GROUP LIST
-========================= */
-
-async function sendGroupsList(chat) {
+async function sendGroupsList(
+  chat
+) {
 
   let text =
-    "📋 *BOT KE GROUPS*\n\n";
+    "📋 *WHATSAPP GROUPS*\n\n";
 
-  if (!savedGroups.length) {
+
+  if (!allGroups.length) {
 
     text +=
-      "❌ Groups detect nahi hue.";
+      "❌ Abhi groups detect nahi hue.";
 
   } else {
 
-    savedGroups.forEach(
+    allGroups.forEach(
       (group, index) => {
 
+        const target =
+          savedGroups.some(
+            g =>
+              g.jid ===
+              group.jid
+          );
+
         text +=
-          `${index + 1}. ${group.name}\n`;
+          `${index + 1}. ${group.name}`;
+
+        if (target) {
+
+          text +=
+            " ✅ TARGET";
+
+        }
+
+        text +=
+          "\n";
 
       }
     );
 
   }
 
+
   await sock.sendMessage(
     chat,
-    { text }
+    {
+      text
+    }
   );
 
 }
 
 
-/* =========================
-   SEND 7-DAY REPORT
-========================= */
+/*
+========================================
+SEND REPORT
+========================================
+*/
 
-async function sendReport(groupJid) {
+async function sendReport(
+  groupJid
+) {
 
   try {
 
@@ -1319,31 +2437,44 @@ async function sendReport(groupJid) {
         groupJid
       );
 
+
     const members =
       meta.participants.map(
-        participant => participant.id
+        p =>
+          p.id
       );
 
+
     const groupData =
-      messageLog[groupJid] || {};
+      messageLog[groupJid] ||
+      {};
+
 
     const start =
       botState.cycleStart;
 
+
     let text =
       `📊 *${REPORT_DAYS} DIN KI REPORT*\n\n`;
+
 
     text +=
       `👥 *GROUP:* ${meta.subject}\n`;
 
+
     text +=
       `🗓 *Start:* ${
         new Date(start)
-          .toLocaleDateString("en-GB")
+          .toLocaleDateString(
+            "en-GB"
+          )
       }\n\n`;
 
+
     const active = [];
+
     const inactive = [];
+
 
     for (
       const member
@@ -1352,11 +2483,13 @@ async function sendReport(groupJid) {
 
       const count =
         (
-          groupData[member] || []
+          groupData[member] ||
+          []
         ).filter(
-          timestamp =>
-            timestamp >= start
+          time =>
+            time >= start
         ).length;
+
 
       if (count > 0) {
 
@@ -1367,19 +2500,24 @@ async function sendReport(groupJid) {
 
       } else {
 
-        inactive.push(member);
+        inactive.push(
+          member
+        );
 
       }
 
     }
+
 
     active.sort(
       (a, b) =>
         b[1] - a[1]
     );
 
+
     text +=
       "✅ *ACTIVE MEMBERS:*\n\n";
+
 
     if (!active.length) {
 
@@ -1389,7 +2527,10 @@ async function sendReport(groupJid) {
     } else {
 
       for (
-        const [member, count]
+        const [
+          member,
+          count
+        ]
         of active
       ) {
 
@@ -1400,8 +2541,10 @@ async function sendReport(groupJid) {
 
     }
 
+
     text +=
       `\n❌ *${REPORT_DAYS} DIN ME 0 MESSAGES:*\n\n`;
+
 
     if (!inactive.length) {
 
@@ -1422,21 +2565,26 @@ async function sendReport(groupJid) {
 
     }
 
+
     await sock.sendMessage(
       groupJid,
-      { text }
+      {
+        text
+      }
     );
+
 
     console.log(
       "✅ Report sent:",
       meta.subject
     );
 
-  } catch (e) {
+
+  } catch (error) {
 
     console.log(
       "Report error:",
-      e.message
+      error.message
     );
 
   }
@@ -1444,20 +2592,27 @@ async function sendReport(groupJid) {
 }
 
 
-/* =========================
-   START WHATSAPP
-========================= */
+/*
+========================================
+START BOT
+========================================
+*/
 
 async function startBot() {
 
-  if (reconnecting) return;
+  if (reconnecting) {
+    return;
+  }
+
 
   reconnecting = true;
+
 
   try {
 
     connectionStatus =
       "connecting";
+
 
     const {
       state,
@@ -1467,10 +2622,12 @@ async function startBot() {
         AUTH_DIR
       );
 
+
     const {
       version
     } =
       await fetchLatestBaileysVersion();
+
 
     sock =
       makeWASocket({
@@ -1479,7 +2636,8 @@ async function startBot() {
 
         logger:
           pino({
-            level: "silent"
+            level:
+              "silent"
           }),
 
         auth: {
@@ -1491,7 +2649,8 @@ async function startBot() {
             makeCacheableSignalKeyStore(
               state.keys,
               pino({
-                level: "silent"
+                level:
+                  "silent"
               })
             )
 
@@ -1521,9 +2680,11 @@ async function startBot() {
     );
 
 
-    /* =========================
-       CONNECTION
-    ========================= */
+    /*
+    ========================================
+    CONNECTION UPDATE
+    ========================================
+    */
 
     sock.ev.on(
       "connection.update",
@@ -1538,13 +2699,15 @@ async function startBot() {
 
         if (qr) {
 
-          latestQR = qr;
+          latestQR =
+            qr;
 
           qrGeneratedAt =
             Date.now();
 
           connectionStatus =
             "qr";
+
 
           console.log(
             "📱 NEW QR GENERATED"
@@ -1554,15 +2717,19 @@ async function startBot() {
 
 
         if (
-          connection === "open"
+          connection ===
+          "open"
         ) {
 
-          latestQR = null;
+          latestQR =
+            null;
 
-          qrGeneratedAt = 0;
+          qrGeneratedAt =
+            0;
 
           ownerJid =
-            sock.user?.id || null;
+            sock.user?.id ||
+            null;
 
           connectionStatus =
             "connected";
@@ -1570,16 +2737,19 @@ async function startBot() {
           connectedAt =
             Date.now();
 
-          lastError = "";
+          lastError =
+            "";
 
-          reconnecting = false;
+          reconnecting =
+            false;
 
-
-          /* Device information */
 
           try {
 
-            const user = sock.user || {};
+            const user =
+              sock.user ||
+              {};
+
 
             deviceInfo = {
 
@@ -1596,19 +2766,11 @@ async function startBot() {
                 "WhatsApp Web",
 
               os:
-                user.platform ||
                 "Unknown"
 
             };
 
-          } catch (e) {
-
-            console.log(
-              "Device info error:",
-              e.message
-            );
-
-          }
+          } catch {}
 
 
           console.log(
@@ -1616,23 +2778,22 @@ async function startBot() {
           );
 
           console.log(
-            "✅ WhatsApp Connected"
+            "✅ WHATSAPP CONNECTED"
           );
 
           console.log(
-            "👑 Owner:",
+            "👑 OWNER:",
             ownerJid
           );
 
           console.log(
-            "📱 Platform:",
-            deviceInfo.platform
-          );
-
-          console.log(
             "================================"
           );
 
+
+          /*
+          FIRST GROUP SCAN
+          */
 
           await findTargetGroups();
 
@@ -1640,20 +2801,26 @@ async function startBot() {
 
 
         if (
-          connection === "close"
+          connection ===
+          "close"
         ) {
 
-          ownerJid = null;
+          ownerJid =
+            null;
 
-          connectedAt = null;
+          connectedAt =
+            null;
 
-          latestQR = null;
+          latestQR =
+            null;
 
           connectionStatus =
             "disconnected";
 
 
-          let statusCode = null;
+          let statusCode =
+            null;
+
 
           try {
 
@@ -1672,7 +2839,8 @@ async function startBot() {
           );
 
 
-          reconnecting = false;
+          reconnecting =
+            false;
 
 
           if (
@@ -1705,23 +2873,29 @@ async function startBot() {
     );
 
 
-    /* =========================
-       MESSAGES
-    ========================= */
+    /*
+    ========================================
+    MESSAGE LISTENER
+    ========================================
+    */
 
     sock.ev.on(
       "messages.upsert",
-      async ({ messages }) => {
+      async ({
+        messages
+      }) => {
 
         try {
 
           const msg =
             messages[0];
 
+
           if (
             !msg ||
             !msg.message
           ) return;
+
 
           if (
             msg.key.fromMe
@@ -1731,7 +2905,9 @@ async function startBot() {
           const chat =
             msg.key.remoteJid;
 
+
           if (!chat) return;
+
 
           if (
             !chat.endsWith(
@@ -1744,6 +2920,7 @@ async function startBot() {
             msg.key.participant ||
             msg.key.remoteJid;
 
+
           if (!sender) return;
 
 
@@ -1755,18 +2932,25 @@ async function startBot() {
               ?.text ||
             "";
 
+
           const command =
             text
               .trim()
               .toLowerCase();
 
 
-          /* OWNER COMMANDS */
+          /*
+          OWNER COMMAND
+          */
 
           if (
             ownerJid &&
-            normalizeJid(sender) ===
-            normalizeJid(ownerJid)
+            normalizeJid(
+              sender
+            ) ===
+            normalizeJid(
+              ownerJid
+            )
           ) {
 
             if (
@@ -1785,18 +2969,27 @@ async function startBot() {
           }
 
 
-          /* TARGET GROUP ONLY */
+          /*
+          ONLY TARGET GROUPS
+          */
 
           if (
-            !isTargetGroup(chat)
-          ) return;
+            !isTargetGroup(
+              chat
+            )
+          ) {
+
+            return;
+
+          }
 
 
           if (
             !messageLog[chat]
           ) {
 
-            messageLog[chat] = {};
+            messageLog[chat] =
+              {};
 
           }
 
@@ -1805,7 +2998,8 @@ async function startBot() {
             !messageLog[chat][sender]
           ) {
 
-            messageLog[chat][sender] = [];
+            messageLog[chat][sender] =
+              [];
 
           }
 
@@ -1827,17 +3021,28 @@ async function startBot() {
           saveData();
 
 
-          /* STATS COMMAND */
+          /*
+          STATS
+          */
 
           if (
-            command !== "!stats"
-          ) return;
+            command !==
+            "!stats"
+          ) {
+
+            return;
+
+          }
 
 
           if (
             !ownerJid ||
-            normalizeJid(sender) !==
-            normalizeJid(ownerJid)
+            normalizeJid(
+              sender
+            ) !==
+            normalizeJid(
+              ownerJid
+            )
           ) {
 
             console.log(
@@ -1854,11 +3059,12 @@ async function startBot() {
             chat
           );
 
-        } catch (e) {
+
+        } catch (error) {
 
           console.log(
             "Message error:",
-            e.message
+            error.message
           );
 
         }
@@ -1866,20 +3072,25 @@ async function startBot() {
       }
     );
 
-  } catch (e) {
+
+  } catch (error) {
 
     console.log(
       "Start error:",
-      e.message
+      error.message
     );
 
+
     lastError =
-      e.message;
+      error.message;
+
 
     connectionStatus =
       "error";
 
-    reconnecting = false;
+
+    reconnecting =
+      false;
 
 
     setTimeout(
@@ -1892,54 +3103,114 @@ async function startBot() {
 }
 
 
-/* =========================
-   QR WATCHDOG
-========================= */
+/*
+========================================
+TARGET CHECK
+========================================
+*/
 
-setInterval(() => {
+function isTargetGroup(
+  jid
+) {
 
-  if (
-    latestQR &&
-    Date.now() - qrGeneratedAt >
-    QR_EXPIRE
-  ) {
+  return savedGroups.some(
+    group =>
+      group.jid === jid
+  );
 
-    console.log(
-      "♻️ QR expired."
-    );
+}
 
-    latestQR = null;
 
-    qrGeneratedAt = 0;
+/*
+========================================
+QR WATCHDOG
+========================================
+*/
 
-    try {
+setInterval(
+  () => {
 
-      if (
-        sock &&
-        sock.ws
-      ) {
+    if (
+      latestQR &&
+      Date.now() -
+      qrGeneratedAt >
+      QR_EXPIRE
+    ) {
 
-        sock.ws.close();
+      console.log(
+        "♻️ QR expired."
+      );
+
+
+      latestQR =
+        null;
+
+
+      qrGeneratedAt =
+        0;
+
+
+      try {
+
+        if (
+          sock &&
+          sock.ws
+        ) {
+
+          sock.ws.close();
+
+        }
+
+      } catch (error) {
+
+        console.log(
+          "QR refresh error:",
+          error.message
+        );
 
       }
 
-    } catch (e) {
+    }
 
-      console.log(
-        "QR refresh error:",
-        e.message
-      );
+  },
+  10000
+);
+
+
+/*
+========================================
+AUTO GROUP RESCAN
+========================================
+
+This is the important fix.
+Every 30 seconds the bot scans
+WhatsApp groups again.
+*/
+
+setInterval(
+  async () => {
+
+    if (
+      sock &&
+      ownerJid &&
+      connectionStatus ===
+      "connected"
+    ) {
+
+      await findTargetGroups();
 
     }
 
-  }
+  },
+  30000
+);
 
-}, 10000);
 
-
-/* =========================
-   AUTO 7-DAY REPORT
-========================= */
+/*
+========================================
+AUTO 7-DAY REPORT
+========================================
+*/
 
 setInterval(
   async () => {
@@ -1984,7 +3255,10 @@ setInterval(
           botState.cycleStart =
             Date.now();
 
-          messageLog = {};
+
+          messageLog =
+            {};
+
 
           saveData();
 
@@ -1997,11 +3271,11 @@ setInterval(
 
       }
 
-    } catch (e) {
+    } catch (error) {
 
       console.log(
         "Auto report error:",
-        e.message
+        error.message
       );
 
     }
@@ -2011,9 +3285,11 @@ setInterval(
 );
 
 
-/* =========================
-   SERVER
-========================= */
+/*
+========================================
+SERVER
+========================================
+*/
 
 app.listen(
   PORT,
@@ -2034,15 +3310,15 @@ app.listen(
     );
 
     console.log(
-      "📱 MODERN PANEL: ENABLED"
+      "👥 AUTO GROUP DETECTION: ON"
     );
 
     console.log(
-      "👥 TARGET GROUPS: 2"
+      "🔄 GROUP RESCAN: 30 SEC"
     );
 
     console.log(
-      "📊 7-DAY REPORT: ENABLED"
+      "📊 7-DAY REPORT: ON"
     );
 
     console.log(
@@ -2052,6 +3328,12 @@ app.listen(
   }
 );
 
+
+/*
+========================================
+START
+========================================
+*/
 
 console.log(
   "🚀 Starting WhatsApp..."

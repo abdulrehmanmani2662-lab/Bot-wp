@@ -41,6 +41,7 @@ const LOG_FILE = path.join(DATA_DIR, "messageLog.json");
 const STATE_FILE = path.join(DATA_DIR, "botState.json");
 const GROUP_FILE = path.join(DATA_DIR, "groups.json");
 const ALL_GROUP_FILE = path.join(DATA_DIR, "allGroups.json");
+const LID_MAP_FILE = path.join(DATA_DIR, "lidMap.json");
 
 for (const dir of [AUTH_DIR, DATA_DIR]) {
   if (!fs.existsSync(dir)) {
@@ -113,7 +114,13 @@ let allGroups = loadJSON(
   []
 );
 
+let lidMap = loadJSON(
+  LID_MAP_FILE,
+  {}
+);
+
 function saveData() {
+
   saveJSON(
     LOG_FILE,
     messageLog
@@ -133,6 +140,11 @@ function saveData() {
     ALL_GROUP_FILE,
     allGroups
   );
+
+  saveJSON(
+    LID_MAP_FILE,
+    lidMap
+  );
 }
 
 /*
@@ -142,21 +154,218 @@ JID HELPERS
 */
 
 function normalizeJid(jid) {
+
   return String(jid || "")
+    .trim()
     .split(":")[0]
     .toLowerCase();
+
+}
+
+function isLid(jid) {
+
+  return normalizeJid(jid)
+    .endsWith("@lid");
+
+}
+
+function isPhoneJid(jid) {
+
+  return normalizeJid(jid)
+    .endsWith("@s.whatsapp.net");
+
+}
+
+function phoneNumberFromJid(jid) {
+
+  const n =
+    normalizeJid(jid);
+
+  if (
+    n.endsWith("@s.whatsapp.net")
+  ) {
+
+    return n.replace(
+      "@s.whatsapp.net",
+      ""
+    );
+
+  }
+
+  return null;
 }
 
 function formatNumber(jid) {
-  let number = String(jid || "")
-    .split("@")[0]
-    .split(":")[0];
 
-  if (number.startsWith("92")) {
-    number = "0" + number.slice(2);
+  const n =
+    normalizeJid(jid);
+
+  let number = "";
+
+  if (
+    n.endsWith("@s.whatsapp.net")
+  ) {
+
+    number =
+      n.replace(
+        "@s.whatsapp.net",
+        ""
+      );
+
+  } else if (
+    n.endsWith("@c.us")
+  ) {
+
+    number =
+      n.replace(
+        "@c.us",
+        ""
+      );
+
+  } else if (
+    n.endsWith("@lid")
+  ) {
+
+    number =
+      n.replace(
+        "@lid",
+        ""
+      );
+
+  } else {
+
+    number =
+      n.split("@")[0];
+
   }
 
   return number;
+}
+
+/*
+========================================
+LID ↔ PHONE MAPPING
+========================================
+*/
+
+function rememberIdentity(
+  lid,
+  phone
+) {
+
+  const l =
+    normalizeJid(lid);
+
+  const p =
+    normalizeJid(phone);
+
+  if (!l || !p) {
+    return false;
+  }
+
+  if (!isLid(l)) {
+    return false;
+  }
+
+  if (!isPhoneJid(p)) {
+    return false;
+  }
+
+  if (lidMap[l] !== p) {
+
+    lidMap[l] = p;
+
+    return true;
+  }
+
+  return false;
+}
+
+function getPhoneFromAnyId(id) {
+
+  const n =
+    normalizeJid(id);
+
+  if (!n) {
+    return null;
+  }
+
+  if (isPhoneJid(n)) {
+
+    return phoneNumberFromJid(n);
+
+  }
+
+  if (
+    isLid(n) &&
+    lidMap[n]
+  ) {
+
+    return phoneNumberFromJid(
+      lidMap[n]
+    );
+
+  }
+
+  return null;
+}
+
+function getMemberNumber(
+  participant
+) {
+
+  const candidates = [
+    participant?.phoneNumber,
+    participant?.id,
+    participant?.lid
+  ];
+
+  /*
+  Direct phone
+  */
+
+  for (
+    const id
+    of candidates
+  ) {
+
+    if (isPhoneJid(id)) {
+
+      return `+${formatNumber(id)}`;
+
+    }
+
+  }
+
+  /*
+  LID mapping
+  */
+
+  for (
+    const id
+    of candidates
+  ) {
+
+    const phone =
+      getPhoneFromAnyId(id);
+
+    if (phone) {
+
+      return `+${phone}`;
+
+    }
+
+  }
+
+  /*
+  Last fallback
+  */
+
+  return formatNumber(
+    participant?.id ||
+    participant?.lid ||
+    ""
+  );
 }
 
 /*
@@ -166,23 +375,36 @@ GROUP NAME MATCHING
 */
 
 function normalizeGroupName(name) {
+
   return String(name || "")
     .normalize("NFKC")
     .toLowerCase()
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/\s+/g, " ")
+    .replace(
+      /[\u200B-\u200D\uFEFF]/g,
+      ""
+    )
+    .replace(
+      /\s+/g,
+      " "
+    )
     .trim();
+
 }
 
 function groupMatches(
   actualName,
   targetName
 ) {
+
   const actual =
-    normalizeGroupName(actualName);
+    normalizeGroupName(
+      actualName
+    );
 
   const target =
-    normalizeGroupName(targetName);
+    normalizeGroupName(
+      targetName
+    );
 
   if (!actual || !target) {
     return false;
@@ -213,13 +435,17 @@ function groupMatches(
   }
 
   if (
-    actualCompact.includes(targetCompact)
+    actualCompact.includes(
+      targetCompact
+    )
   ) {
     return true;
   }
 
   if (
-    targetCompact.includes(actualCompact)
+    targetCompact.includes(
+      actualCompact
+    )
   ) {
     return true;
   }
@@ -234,12 +460,26 @@ HTML ESCAPE
 */
 
 function escapeHTML(text) {
+
   return String(text || "")
     .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+    .replace(
+      /'/g,
+      "&#039;"
+    );
+
 }
 
 /*
@@ -253,9 +493,11 @@ let sock = null;
 let ownerJid = null;
 
 let latestQR = null;
+
 let qrGeneratedAt = 0;
 
-let connectionStatus = "starting";
+let connectionStatus =
+  "starting";
 
 let lastError = "";
 
@@ -264,10 +506,19 @@ let reconnecting = false;
 let connectedAt = null;
 
 let deviceInfo = {
-  platform: "Unknown",
-  device: "Unknown",
-  browser: "Unknown",
-  os: "Unknown"
+
+  platform:
+    "Unknown",
+
+  device:
+    "Unknown",
+
+  browser:
+    "Unknown",
+
+  os:
+    "Unknown"
+
 };
 
 const QR_EXPIRE = 50000;
@@ -278,132 +529,921 @@ EXPRESS
 ========================================
 */
 
-const app = express();
+const app =
+  express();
 
-app.use(express.json());
+app.use(
+  express.json()
+);
 
 /*
 ========================================
-DASHBOARD
+GROUP MESSAGE COUNT
 ========================================
 */
 
-app.get("/", async (req, res) => {
+function getGroupMessageCount(
+  groupJid
+) {
 
-  let qrImage = "";
+  const data =
+    messageLog[groupJid] ||
+    {};
 
-  if (latestQR) {
-    try {
-      qrImage =
-        await QRCode.toDataURL(
-          latestQR
-        );
-    } catch {
-      qrImage = "";
-    }
-  }
-
-  const connected =
-    !!ownerJid;
-
-  const cycleStart =
-    botState.cycleStart ||
-    Date.now();
-
-  const elapsed =
-    Math.max(
-      0,
-      Date.now() - cycleStart
-    );
-
-  const totalTime =
-    REPORT_DAYS *
-    24 *
-    60 *
-    60 *
-    1000;
-
-  const progress =
-    Math.min(
-      100,
-      Math.round(
-        (elapsed / totalTime) * 100
-      )
-    );
-
-  const daysPassed =
-    Math.floor(
-      elapsed /
-      (24 * 60 * 60 * 1000)
-    );
-
-  const daysLeft =
-    Math.max(
-      0,
-      REPORT_DAYS - daysPassed
-    );
-
-  let totalMessages = 0;
+  let total = 0;
 
   for (
-    const groupJid
-    of Object.keys(messageLog)
+    const sender
+    of Object.keys(data)
   ) {
 
-    const users =
-      messageLog[groupJid] || {};
-
-    for (
-      const sender
-      of Object.keys(users)
+    if (
+      Array.isArray(
+        data[sender]
+      )
     ) {
 
-      totalMessages +=
-        users[sender].length;
+      total +=
+        data[sender].length;
 
     }
+
   }
 
-  let statusText = "STARTING";
-  let statusClass = "yellow";
+  return total;
+}
 
-  if (connected) {
+/*
+========================================
+DURATION
+========================================
+*/
 
-    statusText = "CONNECTED";
-    statusClass = "green";
+function formatDuration(ms) {
 
-  } else if (
-    connectionStatus === "qr"
+  const seconds =
+    Math.floor(ms / 1000);
+
+  const days =
+    Math.floor(
+      seconds / 86400
+    );
+
+  const hours =
+    Math.floor(
+      (seconds % 86400) /
+      3600
+    );
+
+  const minutes =
+    Math.floor(
+      (seconds % 3600) /
+      60
+    );
+
+  if (days > 0) {
+
+    return `${days}d ${hours}h`;
+
+  }
+
+  if (hours > 0) {
+
+    return `${hours}h ${minutes}m`;
+
+  }
+
+  return `${minutes}m`;
+}
+
+/*
+========================================
+TARGET CHECK
+========================================
+*/
+
+function isTargetGroup(jid) {
+
+  return savedGroups.some(
+    group =>
+      group.jid === jid
+  );
+
+}
+
+/*
+========================================
+GET MESSAGE COUNT FOR MEMBER
+========================================
+*/
+
+function getMessagesForMember(
+  groupData,
+  participant
+) {
+
+  const candidates =
+    new Set();
+
+  const ids = [
+
+    participant?.id,
+
+    participant?.lid,
+
+    participant?.phoneNumber
+
+  ];
+
+  for (
+    const id
+    of ids
   ) {
 
-    statusText = "SCAN QR";
-    statusClass = "blue";
+    const n =
+      normalizeJid(id);
 
-  } else if (
-    connectionStatus ===
-    "disconnected"
-  ) {
+    if (!n) {
+      continue;
+    }
 
-    statusText = "RECONNECTING";
-    statusClass = "red";
+    candidates.add(n);
+
+    /*
+    LID → phone
+    */
+
+    if (
+      isLid(n) &&
+      lidMap[n]
+    ) {
+
+      candidates.add(
+        normalizeJid(
+          lidMap[n]
+        )
+      );
+
+    }
 
   }
 
   /*
-  TARGET GROUPS
+  Phone → LID reverse mapping
   */
 
-  const groupsHTML =
-    savedGroups.length
-      ? savedGroups.map(
-          (group, index) => {
+  for (
+    const [lid, phone]
+    of Object.entries(lidMap)
+  ) {
 
-            const count =
-              getGroupMessageCount(
-                group.jid
-              );
+    for (
+      const id
+      of ids
+    ) {
 
-            return `
+      const n =
+        normalizeJid(id);
+
+      if (
+        isPhoneJid(n) &&
+        normalizeJid(phone) === n
+      ) {
+
+        candidates.add(
+          normalizeJid(lid)
+        );
+
+      }
+
+    }
+
+  }
+
+  let result = [];
+
+  /*
+  Search all possible sender IDs
+  */
+
+  for (
+    const key
+    of candidates
+  ) {
+
+    if (
+      Array.isArray(
+        groupData[key]
+      )
+    ) {
+
+      result =
+        result.concat(
+          groupData[key]
+        );
+
+    }
+
+  }
+
+  /*
+  Old data can sometimes
+  contain duplicate aliases.
+  */
+
+  result =
+    [...new Set(result)];
+
+  const start =
+    Number(
+      botState.cycleStart ||
+      Date.now()
+    );
+
+  return result.filter(
+    time =>
+      Number(time) >= start
+  );
+}
+
+/*
+========================================
+REPORT
+========================================
+*/
+
+async function sendReport(
+  groupJid
+) {
+
+  try {
+
+    const meta =
+      await sock.groupMetadata(
+        groupJid
+      );
+
+    const groupData =
+      messageLog[groupJid] ||
+      {};
+
+    let mappingChanged =
+      false;
+
+    /*
+    Build mappings from metadata
+    */
+
+    for (
+      const participant
+      of meta.participants || []
+    ) {
+
+      if (
+        participant.id &&
+        participant.phoneNumber
+      ) {
+
+        if (
+          rememberIdentity(
+            participant.id,
+            participant.phoneNumber
+          )
+        ) {
+
+          mappingChanged =
+            true;
+
+        }
+
+      }
+
+      if (
+        participant.lid &&
+        participant.phoneNumber
+      ) {
+
+        if (
+          rememberIdentity(
+            participant.lid,
+            participant.phoneNumber
+          )
+        ) {
+
+          mappingChanged =
+            true;
+
+        }
+
+      }
+
+    }
+
+    if (mappingChanged) {
+
+      saveJSON(
+        LID_MAP_FILE,
+        lidMap
+      );
+
+    }
+
+    const active = [];
+
+    const inactive = [];
+
+    let totalMessages = 0;
+
+    /*
+    Every group member
+    */
+
+    for (
+      const participant
+      of meta.participants || []
+    ) {
+
+      const times =
+        getMessagesForMember(
+          groupData,
+          participant
+        );
+
+      const count =
+        times.length;
+
+      const number =
+        getMemberNumber(
+          participant
+        );
+
+      if (count > 0) {
+
+        active.push({
+
+          number,
+
+          count
+
+        });
+
+        totalMessages +=
+          count;
+
+      } else {
+
+        inactive.push({
+
+          number,
+
+          count: 0
+
+        });
+
+      }
+
+    }
+
+    /*
+    Highest message first
+    */
+
+    active.sort(
+      (a, b) =>
+        b.count - a.count
+    );
+
+    let text =
+      "╭━━━━━━━━━━━━━━━━━━━━╮\n";
+
+    text +=
+      "   📊 *7 DIN KI REPORT*\n";
+
+    text +=
+      "╰━━━━━━━━━━━━━━━━━━━━╯\n\n";
+
+    text +=
+      `👥 *GROUP:* ${meta.subject}\n`;
+
+    text +=
+      `🗓 *START:* ${
+        new Date(
+          botState.cycleStart
+        ).toLocaleDateString(
+          "en-GB"
+        )
+      }\n`;
+
+    text +=
+      `💬 *TOTAL MESSAGES:* ${totalMessages}\n\n`;
+
+    /*
+    ACTIVE
+    */
+
+    text +=
+      "┏━━━━━━━━━━━━━━━━━━━━┓\n";
+
+    text +=
+      "┃ 🟢 *ACTIVE MEMBERS*\n";
+
+    text +=
+      "┗━━━━━━━━━━━━━━━━━━━━┛\n\n";
+
+    if (!active.length) {
+
+      text +=
+        "😅 Kisi ne message nahi kiya.\n\n";
+
+    } else {
+
+      let number =
+        1;
+
+      for (
+        const user
+        of active
+      ) {
+
+        text +=
+          `${number}. 📱 *${user.number}*\n`;
+
+        text +=
+          `   💬 *${user.count} messages*\n\n`;
+
+        number++;
+
+      }
+
+    }
+
+    /*
+    INACTIVE
+    */
+
+    text +=
+      "┏━━━━━━━━━━━━━━━━━━━━┓\n";
+
+    text +=
+      "┃ 🔴 *0 MESSAGES*\n";
+
+    text +=
+      "┗━━━━━━━━━━━━━━━━━━━━┛\n\n";
+
+    if (!inactive.length) {
+
+      text +=
+        "🎉 Sab members active hain!\n";
+
+    } else {
+
+      let number =
+        1;
+
+      for (
+        const user
+        of inactive
+      ) {
+
+        text +=
+          `${number}. 📱 ${user.number} — *0 messages* 🚫\n`;
+
+        number++;
+
+      }
+
+    }
+
+    /*
+    FOOTER
+    */
+
+    text +=
+      "\n━━━━━━━━━━━━━━━━━━━━\n";
+
+    text +=
+      `📈 *ACTIVE:* ${active.length}\n`;
+
+    text +=
+      `📉 *INACTIVE:* ${inactive.length}\n`;
+
+    text +=
+      `💬 *TOTAL:* ${totalMessages}\n`;
+
+    text +=
+      "━━━━━━━━━━━━━━━━━━━━";
+
+    await sock.sendMessage(
+      groupJid,
+      {
+        text
+      }
+    );
+
+    console.log(
+      "✅ REPORT SENT:",
+      meta.subject,
+      "|",
+      totalMessages,
+      "messages"
+    );
+
+  } catch (error) {
+
+    console.log(
+      "❌ REPORT ERROR:",
+      error.message
+    );
+
+  }
+
+}
+
+/*
+========================================
+GROUP SCAN
+========================================
+*/
+
+async function findTargetGroups() {
+
+  if (!sock) {
+
+    return;
+
+  }
+
+  try {
+
+    console.log(
+      "🔍 Scanning WhatsApp groups..."
+    );
+
+    const groups =
+      await sock.groupFetchAllParticipating();
+
+    const foundAll = [];
+
+    for (
+      const jid
+      of Object.keys(groups)
+    ) {
+
+      const group =
+        groups[jid];
+
+      if (!group) {
+        continue;
+      }
+
+      const name =
+        String(
+          group.subject || ""
+        ).trim();
+
+      if (!name) {
+        continue;
+      }
+
+      foundAll.push({
+
+        jid,
+
+        name
+
+      });
+
+    }
+
+    allGroups =
+      foundAll.sort(
+        (a, b) =>
+          a.name.localeCompare(
+            b.name
+          )
+      );
+
+    const detected = [];
+
+    for (
+      const targetName
+      of TARGET_GROUP_NAMES
+    ) {
+
+      const match =
+        foundAll.find(
+          group =>
+            groupMatches(
+              group.name,
+              targetName
+            )
+        );
+
+      if (
+        match &&
+        !detected.some(
+          g =>
+            g.jid ===
+            match.jid
+        )
+      ) {
+
+        detected.push({
+
+          jid:
+            match.jid,
+
+          name:
+            match.name,
+
+          target:
+            targetName
+
+        });
+
+      }
+
+    }
+
+    savedGroups =
+      detected.slice(0, 2);
+
+    saveData();
+
+    console.log(
+      "================================"
+    );
+
+    console.log(
+      "📋 TOTAL GROUPS FOUND:",
+      allGroups.length
+    );
+
+    console.log(
+      "🎯 TARGET GROUPS FOUND:",
+      savedGroups.length
+    );
+
+    savedGroups.forEach(
+      group => {
+
+        console.log(
+          "✅",
+          group.name
+        );
+
+        console.log(
+          "   JID:",
+          group.jid
+        );
+
+      }
+    );
+
+    console.log(
+      "================================"
+    );
+
+  } catch (error) {
+
+    console.log(
+      "❌ GROUP SCAN ERROR:",
+      error.message
+    );
+
+    lastError =
+      error.message;
+
+  }
+
+}
+
+/*
+========================================
+GROUP LIST
+========================================
+*/
+
+async function sendGroupsList(
+  chat
+) {
+
+  let text =
+    "╭━━━━━━━━━━━━━━━━━━━━╮\n";
+
+  text +=
+    "   📋 *WHATSAPP GROUPS*\n";
+
+  text +=
+    "╰━━━━━━━━━━━━━━━━━━━━╯\n\n";
+
+  if (!allGroups.length) {
+
+    text +=
+      "❌ Groups abhi detect nahi hue.";
+
+  } else {
+
+    allGroups.forEach(
+      (group, index) => {
+
+        const target =
+          savedGroups.some(
+            g =>
+              g.jid ===
+              group.jid
+          );
+
+        text +=
+          `${index + 1}. ${
+            target
+              ? "🎯"
+              : "📁"
+          } *${group.name}*\n`;
+
+      }
+    );
+
+  }
+
+  await sock.sendMessage(
+    chat,
+    {
+      text
+    }
+  );
+
+}
+
+/*
+========================================
+EXPRESS DASHBOARD
+========================================
+*/
+
+app.get(
+  "/",
+  async (req, res) => {
+
+    let qrImage =
+      "";
+
+    if (latestQR) {
+
+      try {
+
+        qrImage =
+          await QRCode.toDataURL(
+            latestQR
+          );
+
+      } catch {
+
+        qrImage =
+          "";
+
+      }
+
+    }
+
+    const connected =
+      !!ownerJid;
+
+    const cycleStart =
+      botState.cycleStart ||
+      Date.now();
+
+    const elapsed =
+      Math.max(
+        0,
+        Date.now() -
+        cycleStart
+      );
+
+    const totalTime =
+      REPORT_DAYS *
+      24 *
+      60 *
+      60 *
+      1000;
+
+    const progress =
+      Math.min(
+        100,
+        Math.round(
+          (
+            elapsed /
+            totalTime
+          ) * 100
+        )
+      );
+
+    const daysPassed =
+      Math.floor(
+        elapsed /
+        (
+          24 *
+          60 *
+          60 *
+          1000
+        )
+      );
+
+    const daysLeft =
+      Math.max(
+        0,
+        REPORT_DAYS -
+        daysPassed
+      );
+
+    let totalMessages =
+      0;
+
+    for (
+      const groupJid
+      of Object.keys(
+        messageLog
+      )
+    ) {
+
+      const users =
+        messageLog[
+          groupJid
+        ] || {};
+
+      for (
+        const sender
+        of Object.keys(users)
+      ) {
+
+        if (
+          Array.isArray(
+            users[sender]
+          )
+        ) {
+
+          totalMessages +=
+            users[sender].length;
+
+        }
+
+      }
+
+    }
+
+    let statusText =
+      "STARTING";
+
+    let statusClass =
+      "yellow";
+
+    if (connected) {
+
+      statusText =
+        "CONNECTED";
+
+      statusClass =
+        "green";
+
+    } else if (
+      connectionStatus ===
+      "qr"
+    ) {
+
+      statusText =
+        "SCAN QR";
+
+      statusClass =
+        "blue";
+
+    } else if (
+      connectionStatus ===
+      "disconnected"
+    ) {
+
+      statusText =
+        "RECONNECTING";
+
+      statusClass =
+        "red";
+
+    }
+
+    /*
+    TARGET GROUPS
+    */
+
+    const groupsHTML =
+      savedGroups.length
+        ? savedGroups.map(
+            (group, index) => {
+
+              const count =
+                getGroupMessageCount(
+                  group.jid
+                );
+
+              return `
 <div class="group-card">
 
   <div class="group-icon">
@@ -434,9 +1474,9 @@ app.get("/", async (req, res) => {
 </div>
 `;
 
-          }
-        ).join("")
-      : `
+            }
+          ).join("")
+        : `
 <div class="empty-box">
 
   <div class="empty-icon">
@@ -454,22 +1494,23 @@ app.get("/", async (req, res) => {
 </div>
 `;
 
-  /*
-  ALL GROUPS
-  */
+    /*
+    ALL GROUPS
+    */
 
-  const allGroupsHTML =
-    allGroups.length
-      ? allGroups.map(
-          group => {
+    const allGroupsHTML =
+      allGroups.length
+        ? allGroups.map(
+            group => {
 
-            const isTarget =
-              savedGroups.some(
-                g =>
-                  g.jid === group.jid
-              );
+              const isTarget =
+                savedGroups.some(
+                  g =>
+                    g.jid ===
+                    group.jid
+                );
 
-            return `
+              return `
 <div class="all-group">
 
   <div>
@@ -487,39 +1528,39 @@ app.get("/", async (req, res) => {
   ${
     isTarget
       ? `
-        <span class="target-tag">
-          TARGET
-        </span>
-      `
+<span class="target-tag">
+  TARGET
+</span>
+`
       : `
-        <span class="normal-tag">
-          GROUP
-        </span>
-      `
+<span class="normal-tag">
+  GROUP
+</span>
+`
   }
 
 </div>
 `;
 
-          }
-        ).join("")
-      : `
+            }
+          ).join("")
+        : `
 <div class="empty-box">
   No groups loaded yet.
 </div>
 `;
 
-  /*
-  QR
-  */
+    /*
+    QR
+    */
 
-  const qrHTML =
-    qrImage
-      ? `
+    const qrHTML =
+      qrImage
+        ? `
 <div class="qr-container">
 
   <div class="qr-title">
-    Scan QR with WhatsApp
+    📱 Scan QR with WhatsApp
   </div>
 
   <img
@@ -529,12 +1570,12 @@ app.get("/", async (req, res) => {
   >
 
   <div class="qr-refresh">
-    QR automatically refreshes.
+    🔄 QR automatically refreshes
   </div>
 
 </div>
 `
-      : `
+        : `
 <div class="qr-wait">
 
   <div class="spinner"></div>
@@ -558,14 +1599,15 @@ app.get("/", async (req, res) => {
 </div>
 `;
 
-  const uptime =
-    connectedAt
-      ? formatDuration(
-          Date.now() - connectedAt
-        )
-      : "Offline";
+    const uptime =
+      connectedAt
+        ? formatDuration(
+            Date.now() -
+            connectedAt
+          )
+        : "Offline";
 
-  res.send(`
+    res.send(`
 <!DOCTYPE html>
 
 <html>
@@ -581,11 +1623,11 @@ app.get("/", async (req, res) => {
 
 <meta
   http-equiv="refresh"
-  content="15"
+  content="10"
 >
 
 <title>
-WhatsApp Report Bot
+WhatsApp Report Bot • Premium
 </title>
 
 <style>
@@ -600,26 +1642,62 @@ body {
 
   font-family:
     Arial,
+    Helvetica,
     sans-serif;
 
-  color: white;
+  color: #fff;
 
   min-height: 100vh;
 
   background:
     radial-gradient(
-      circle at top left,
-      #192542,
-      #080b14 48%,
-      #04060b
+      circle at 10% 0%,
+      rgba(0,255,170,.18),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 90% 10%,
+      rgba(120,70,255,.20),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 50% 100%,
+      rgba(0,160,255,.10),
+      transparent 35%
+    ),
+    #050711;
+}
+
+body:before {
+
+  content: "";
+
+  position: fixed;
+
+  inset: 0;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      rgba(255,255,255,.015) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(255,255,255,.015) 1px,
+      transparent 1px
     );
+
+  background-size:
+    30px 30px;
 }
 
 .container {
 
   width: 94%;
 
-  max-width: 1250px;
+  max-width: 1350px;
 
   margin: auto;
 
@@ -628,6 +1706,10 @@ body {
 }
 
 .header {
+
+  position: relative;
+
+  overflow: hidden;
 
   display: flex;
 
@@ -639,18 +1721,27 @@ body {
 
   gap: 20px;
 
-  padding: 22px;
+  padding: 24px;
 
   margin-bottom: 20px;
 
-  border-radius: 24px;
+  border-radius: 26px;
 
   background:
-    rgba(255,255,255,.045);
+    linear-gradient(
+      135deg,
+      rgba(37,211,102,.11),
+      rgba(110,70,255,.09),
+      rgba(0,180,255,.06)
+    );
 
   border:
     1px solid
-    rgba(255,255,255,.08);
+    rgba(255,255,255,.10);
+
+  box-shadow:
+    0 20px 70px
+    rgba(0,0,0,.35);
 }
 
 .brand {
@@ -665,9 +1756,9 @@ body {
 
 .logo {
 
-  width: 55px;
+  width: 60px;
 
-  height: 55px;
+  height: 60px;
 
   display: flex;
 
@@ -677,32 +1768,40 @@ body {
   justify-content:
     center;
 
-  border-radius: 17px;
+  border-radius: 19px;
 
-  font-size: 27px;
+  font-size: 29px;
 
   background:
     linear-gradient(
       135deg,
       #25d366,
-      #128c7e
+      #08aeea,
+      #7657ff
     );
+
+  box-shadow:
+    0 0 35px
+    rgba(37,211,102,.30);
 }
 
 .brand h1 {
 
   margin: 0;
 
-  font-size: 22px;
+  font-size: 24px;
+
+  letter-spacing:
+    -.5px;
 }
 
 .brand p {
 
-  margin: 5px 0 0;
+  margin: 6px 0 0;
 
-  color: #8993a8;
+  color: #8e9ab2;
 
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .status {
@@ -712,19 +1811,23 @@ body {
   align-items:
     center;
 
-  gap: 8px;
+  gap: 9px;
 
   padding:
-    10px 15px;
+    11px 17px;
 
   border-radius: 50px;
 
   background:
-    rgba(255,255,255,.05);
+    rgba(255,255,255,.06);
 
-  font-size: 12px;
+  border:
+    1px solid
+    rgba(255,255,255,.08);
 
-  font-weight: bold;
+  font-size: 11px;
+
+  font-weight: 800;
 }
 
 .dot {
@@ -741,19 +1844,35 @@ body {
   background: #25d366;
 
   box-shadow:
-    0 0 15px #25d366;
+    0 0 18px
+    #25d366;
 }
 
 .yellow .dot {
-  background: #ffc107;
+
+  background: #ffd54a;
+
+  box-shadow:
+    0 0 14px
+    #ffd54a;
 }
 
 .blue .dot {
-  background: #2196f3;
+
+  background: #38a9ff;
+
+  box-shadow:
+    0 0 14px
+    #38a9ff;
 }
 
 .red .dot {
-  background: #ff5252;
+
+  background: #ff5364;
+
+  box-shadow:
+    0 0 14px
+    #ff5364;
 }
 
 .stats {
@@ -770,38 +1889,65 @@ body {
 
 .stat {
 
-  padding: 20px;
+  position: relative;
 
-  border-radius: 20px;
+  overflow: hidden;
+
+  padding: 21px;
+
+  border-radius: 22px;
 
   background:
     rgba(255,255,255,.045);
 
   border:
     1px solid
-    rgba(255,255,255,.07);
+    rgba(255,255,255,.08);
+
+  box-shadow:
+    0 15px 45px
+    rgba(0,0,0,.18);
+
+  transition:
+    transform .2s,
+    border .2s;
+}
+
+.stat:hover {
+
+  transform:
+    translateY(-3px);
+
+  border-color:
+    rgba(255,255,255,.16);
 }
 
 .stat-icon {
-  font-size: 22px;
+
+  font-size: 23px;
 }
 
 .stat-title {
 
   margin-top: 12px;
 
-  color: #8e99ae;
+  color: #7f8ba3;
 
-  font-size: 12px;
+  font-size: 10px;
+
+  font-weight: 700;
+
+  letter-spacing:
+    1px;
 }
 
 .stat-value {
 
-  margin-top: 5px;
+  margin-top: 6px;
 
-  font-size: 23px;
+  font-size: 25px;
 
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .grid {
@@ -825,9 +1971,16 @@ body {
 
   border:
     1px solid
-    rgba(255,255,255,.07);
+    rgba(255,255,255,.08);
+
+  box-shadow:
+    0 15px 50px
+    rgba(0,0,0,.22);
 
   margin-bottom: 20px;
+
+  backdrop-filter:
+    blur(12px);
 }
 
 .card-title {
@@ -847,24 +2000,30 @@ body {
 
   margin: 0;
 
-  font-size: 17px;
+  font-size: 16px;
 }
 
 .card-title span {
 
-  color: #8993a8;
+  color: #6f7c94;
 
-  font-size: 11px;
+  font-size: 9px;
+
+  font-weight: 800;
 }
 
 .device {
 
-  padding: 18px;
+  padding: 17px;
 
   border-radius: 18px;
 
   background:
-    rgba(0,0,0,.20);
+    linear-gradient(
+      135deg,
+      rgba(0,0,0,.25),
+      rgba(255,255,255,.025)
+    );
 }
 
 .device-row {
@@ -876,7 +2035,7 @@ body {
 
   gap: 15px;
 
-  padding: 9px 0;
+  padding: 11px 0;
 
   border-bottom:
     1px solid
@@ -889,22 +2048,29 @@ body {
 
 .device-label {
 
-  color: #8993a8;
+  color: #7f8ba1;
 
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .device-value {
 
-  font-size: 13px;
+  font-size: 12px;
 
-  font-weight: 600;
+  font-weight: 700;
 
   text-align: right;
+
+  word-break: break-word;
 }
 
 .online {
+
   color: #25d366;
+
+  text-shadow:
+    0 0 12px
+    rgba(37,211,102,.35);
 }
 
 .notice {
@@ -916,28 +2082,39 @@ body {
   border-radius: 15px;
 
   background:
-    rgba(33,150,243,.08);
+    linear-gradient(
+      135deg,
+      rgba(38,166,255,.09),
+      rgba(111,78,255,.08)
+    );
 
   border:
     1px solid
-    rgba(33,150,243,.15);
+    rgba(70,150,255,.16);
 
-  color: #9ecaff;
+  color: #9ecbff;
 
-  font-size: 11px;
+  font-size: 10px;
 
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .qr-container {
+
   text-align: center;
+
+  padding: 5px;
 }
 
 .qr-title {
 
-  color: #b9c2d4;
+  color: #c3ccda;
 
   margin-bottom: 15px;
+
+  font-size: 12px;
+
+  font-weight: 700;
 }
 
 .qr {
@@ -950,14 +2127,18 @@ body {
 
   background: white;
 
-  border-radius: 18px;
+  border-radius: 20px;
+
+  box-shadow:
+    0 15px 50px
+    rgba(255,255,255,.10);
 }
 
 .qr-refresh {
 
-  color: #7f8a9e;
+  color: #68758b;
 
-  font-size: 11px;
+  font-size: 10px;
 
   margin-top: 12px;
 }
@@ -971,17 +2152,20 @@ body {
 
 .spinner {
 
-  width: 40px;
+  width: 43px;
 
-  height: 40px;
+  height: 43px;
 
   margin: auto;
 
   border: 4px solid
-    rgba(255,255,255,.1);
+    rgba(255,255,255,.08);
 
   border-top-color:
     #25d366;
+
+  border-right-color:
+    #7b61ff;
 
   border-radius: 50%;
 
@@ -997,11 +2181,17 @@ body {
 
 }
 
+.qr-wait h3 {
+
+  margin:
+    15px 0 7px;
+}
+
 .qr-wait p {
 
-  color: #7f8a9e;
+  color: #758197;
 
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .group-card {
@@ -1017,19 +2207,29 @@ body {
 
   margin-bottom: 10px;
 
-  border-radius: 17px;
+  border-radius: 18px;
 
   background:
-    rgba(0,0,0,.18);
+    linear-gradient(
+      135deg,
+      rgba(37,211,102,.055),
+      rgba(255,255,255,.025)
+    );
+
+  border:
+    1px solid
+    rgba(255,255,255,.06);
 }
 
 .group-icon {
 
-  width: 43px;
+  width: 45px;
 
-  height: 43px;
+  height: 45px;
 
-  border-radius: 13px;
+  flex-shrink: 0;
+
+  border-radius: 14px;
 
   display: flex;
 
@@ -1040,7 +2240,11 @@ body {
     center;
 
   background:
-    rgba(255,255,255,.07);
+    linear-gradient(
+      135deg,
+      rgba(37,211,102,.15),
+      rgba(92,78,255,.15)
+    );
 
   font-size: 20px;
 }
@@ -1056,25 +2260,31 @@ body {
 
   font-size: 13px;
 
-  font-weight: 700;
+  font-weight: 800;
+
+  line-height: 1.4;
 }
 
 .group-jid {
 
-  color: #69758b;
+  color: #5f6c82;
 
-  font-size: 9px;
+  font-size: 8px;
 
-  margin-top: 4px;
+  margin-top: 5px;
+
+  word-break: break-all;
 }
 
 .group-count {
 
-  color: #7f8a9e;
+  color: #25d366;
 
   font-size: 10px;
 
-  margin-top: 5px;
+  margin-top: 6px;
+
+  font-weight: 700;
 }
 
 .active-badge {
@@ -1088,9 +2298,9 @@ body {
 
   color: #25d366;
 
-  font-size: 9px;
+  font-size: 8px;
 
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .active-badge span {
@@ -1102,6 +2312,10 @@ body {
   border-radius: 50%;
 
   background: #25d366;
+
+  box-shadow:
+    0 0 10px
+    #25d366;
 }
 
 .all-group {
@@ -1120,26 +2334,32 @@ body {
 
   margin-bottom: 8px;
 
-  border-radius: 14px;
+  border-radius: 15px;
 
   background:
-    rgba(0,0,0,.16);
+    rgba(0,0,0,.15);
+
+  border:
+    1px solid
+    rgba(255,255,255,.045);
 }
 
 .all-group-name {
 
-  font-size: 12px;
+  font-size: 11px;
 
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .all-group-jid {
 
-  color: #667187;
+  color: #59667c;
 
-  font-size: 9px;
+  font-size: 8px;
 
   margin-top: 4px;
+
+  word-break: break-all;
 }
 
 .target-tag,
@@ -1150,9 +2370,9 @@ body {
 
   border-radius: 8px;
 
-  font-size: 8px;
+  font-size: 7px;
 
-  font-weight: bold;
+  font-weight: 900;
 }
 
 .target-tag {
@@ -1161,17 +2381,22 @@ body {
 
   background:
     rgba(37,211,102,.10);
+
+  border:
+    1px solid
+    rgba(37,211,102,.15);
 }
 
 .normal-tag {
 
-  color: #7f8a9e;
+  color: #78849a;
 
   background:
-    rgba(255,255,255,.05);
+    rgba(255,255,255,.04);
 }
 
 .progress-wrap {
+
   margin-top: 10px;
 }
 
@@ -1182,19 +2407,19 @@ body {
   justify-content:
     space-between;
 
-  color: #8b96aa;
+  color: #8995a9;
 
-  font-size: 11px;
+  font-size: 10px;
 
-  margin-bottom: 8px;
+  margin-bottom: 9px;
 }
 
 .progress {
 
-  height: 8px;
+  height: 9px;
 
   background:
-    rgba(255,255,255,.08);
+    rgba(255,255,255,.07);
 
   border-radius: 20px;
 
@@ -1211,8 +2436,13 @@ body {
     linear-gradient(
       90deg,
       #25d366,
-      #6ee7b7
+      #00b8ff,
+      #7657ff
     );
+
+  box-shadow:
+    0 0 18px
+    rgba(37,211,102,.35);
 }
 
 .empty-box {
@@ -1221,7 +2451,7 @@ body {
 
   padding: 30px;
 
-  color: #8893a8;
+  color: #8793a7;
 }
 
 .empty-icon {
@@ -1236,6 +2466,8 @@ body {
   display: block;
 
   color: white;
+
+  font-size: 13px;
 }
 
 .empty-box small {
@@ -1243,34 +2475,49 @@ body {
   display: block;
 
   margin-top: 7px;
+
+  font-size: 10px;
 }
 
 .footer {
 
   text-align: center;
 
-  color: #5d687b;
+  color: #536075;
 
-  font-size: 11px;
+  font-size: 9px;
 
   margin-top: 5px;
+
+  letter-spacing:
+    .4px;
 }
 
-@media(max-width:850px) {
+@media(max-width:900px) {
 
   .stats {
+
     grid-template-columns:
       repeat(2,1fr);
+
   }
 
   .grid {
+
     grid-template-columns:
       1fr;
+
   }
 
 }
 
 @media(max-width:500px) {
+
+  .container {
+
+    width: 92%;
+
+  }
 
   .header {
 
@@ -1279,6 +2526,26 @@ body {
 
     align-items:
       flex-start;
+
+  }
+
+  .stats {
+
+    grid-template-columns:
+      repeat(2,1fr);
+
+  }
+
+  .stat {
+
+    padding: 16px;
+
+  }
+
+  .stat-value {
+
+    font-size: 20px;
+
   }
 
 }
@@ -1306,7 +2573,7 @@ body {
       </h1>
 
       <p>
-        7-Day Group Monitoring System
+        Premium 7-Day Group Monitoring System
       </p>
 
     </div>
@@ -1348,7 +2615,7 @@ body {
   <div class="stat">
 
     <div class="stat-icon">
-      👥
+      🎯
     </div>
 
     <div class="stat-title">
@@ -1368,7 +2635,7 @@ body {
     </div>
 
     <div class="stat-title">
-      MESSAGES
+      TOTAL MESSAGES
     </div>
 
     <div class="stat-value">
@@ -1408,7 +2675,7 @@ body {
     </h2>
 
     <span>
-      LIVE
+      LIVE DEVICE
     </span>
 
   </div>
@@ -1425,7 +2692,8 @@ body {
         ${
           connected
             ? "● Connected"
-            : "● " + statusText
+            : "● " +
+              statusText
         }
       </span>
 
@@ -1497,9 +2765,9 @@ body {
 
   <div class="notice">
 
-    🔒 WhatsApp linked device ka
-    public IP/country Baileys session
-    se reliably available nahi hota.
+    🔒 Linked WhatsApp device ka
+    public IP/country Baileys se
+    reliably available nahi hota.
 
   </div>
 
@@ -1510,7 +2778,7 @@ body {
   <div class="card-title">
 
     <h2>
-      👥 Target Groups
+      🎯 Target Groups
     </h2>
 
     <span>
@@ -1586,7 +2854,7 @@ body {
       </span>
 
       <span>
-        ${REPORT_DAYS} days
+        ${daysLeft} days left
       </span>
 
     </div>
@@ -1608,8 +2876,10 @@ body {
 <div class="footer">
 
   WhatsApp Report Bot
+  • Premium Dashboard
   • Auto Group Detection
-  • !rana Report
+  • !rana
+  • !stats
   • 7-Day Reports
 
 </div>
@@ -1620,7 +2890,9 @@ body {
 
 </html>
 `);
-});
+
+  }
+);
 
 /*
 ========================================
@@ -1628,468 +2900,83 @@ HEALTH
 ========================================
 */
 
-app.get("/health", (req, res) => {
+app.get(
+  "/health",
+  (req, res) => {
 
-  res.json({
+    res.json({
 
-    status: "ok",
+      status:
+        "ok",
 
-    whatsapp:
-      ownerJid
-        ? "connected"
-        : connectionStatus,
+      whatsapp:
+        ownerJid
+          ? "connected"
+          : connectionStatus,
 
-    owner:
-      ownerJid || null,
+      owner:
+        ownerJid || null,
 
-    number:
-      ownerJid
-        ? formatNumber(ownerJid)
-        : null,
-
-    targetGroups:
-      savedGroups,
-
-    allGroups:
-      allGroups.length,
-
-    qr:
-      latestQR
-        ? "available"
-        : "waiting",
-
-    device:
-      deviceInfo,
-
-    lastError:
-      lastError || null
-
-  });
-
-});
-
-/*
-========================================
-GROUP MESSAGE COUNT
-========================================
-*/
-
-function getGroupMessageCount(
-  groupJid
-) {
-
-  const data =
-    messageLog[groupJid] || {};
-
-  let total = 0;
-
-  for (
-    const sender
-    of Object.keys(data)
-  ) {
-
-    total +=
-      data[sender].length;
-
-  }
-
-  return total;
-}
-
-/*
-========================================
-DURATION
-========================================
-*/
-
-function formatDuration(ms) {
-
-  const seconds =
-    Math.floor(ms / 1000);
-
-  const days =
-    Math.floor(
-      seconds / 86400
-    );
-
-  const hours =
-    Math.floor(
-      (seconds % 86400) / 3600
-    );
-
-  const minutes =
-    Math.floor(
-      (seconds % 3600) / 60
-    );
-
-  if (days > 0) {
-    return `${days}d ${hours}h`;
-  }
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-
-  return `${minutes}m`;
-}
-
-/*
-========================================
-FIND TARGET GROUPS
-========================================
-*/
-
-async function findTargetGroups() {
-
-  if (!sock) {
-    console.log(
-      "⚠️ Socket not ready"
-    );
-    return;
-  }
-
-  try {
-
-    console.log(
-      "🔍 Scanning WhatsApp groups..."
-    );
-
-    const groups =
-      await sock.groupFetchAllParticipating();
-
-    const foundAll = [];
-
-    for (
-      const jid
-      of Object.keys(groups)
-    ) {
-
-      const group =
-        groups[jid];
-
-      if (!group) continue;
-
-      const name =
-        String(
-          group.subject || ""
-        ).trim();
-
-      if (!name) continue;
-
-      foundAll.push({
-        jid,
-        name
-      });
-
-    }
-
-    allGroups =
-      foundAll.sort(
-        (a, b) =>
-          a.name.localeCompare(
-            b.name
-          )
-      );
-
-    const detected = [];
-
-    for (
-      const targetName
-      of TARGET_GROUP_NAMES
-    ) {
-
-      const match =
-        foundAll.find(
-          group =>
-            groupMatches(
-              group.name,
-              targetName
+      number:
+        ownerJid
+          ? formatNumber(
+              ownerJid
             )
-        );
+          : null,
 
-      if (
-        match &&
-        !detected.some(
-          g =>
-            g.jid === match.jid
-        )
-      ) {
+      targetGroups:
+        savedGroups,
 
-        detected.push({
+      allGroups:
+        allGroups.length,
 
-          jid:
-            match.jid,
+      messages:
+        Object.values(
+          messageLog
+        ).reduce(
+          (
+            total,
+            group
+          ) => {
 
-          name:
-            match.name,
+            return total +
+              Object.values(
+                group
+              ).reduce(
+                (
+                  sum,
+                  arr
+                ) =>
+                  sum +
+                  (
+                    Array.isArray(
+                      arr
+                    )
+                      ? arr.length
+                      : 0
+                  ),
+                0
+              );
 
-          target:
-            targetName
+          },
+          0
+        ),
 
-        });
+      device:
+        deviceInfo,
 
-      }
+      lidMappings:
+        Object.keys(
+          lidMap
+        ).length,
 
-    }
+      lastError:
+        lastError || null
 
-    savedGroups =
-      detected.slice(0, 2);
-
-    saveData();
-
-    console.log(
-      "================================"
-    );
-
-    console.log(
-      "📋 TOTAL GROUPS FOUND:",
-      allGroups.length
-    );
-
-    console.log(
-      "🎯 TARGET GROUPS FOUND:",
-      savedGroups.length
-    );
-
-    savedGroups.forEach(
-      group => {
-
-        console.log(
-          "✅",
-          group.name
-        );
-
-        console.log(
-          "   JID:",
-          group.jid
-        );
-
-      }
-    );
-
-    console.log(
-      "================================"
-    );
-
-  } catch (error) {
-
-    console.log(
-      "❌ Group detection error:",
-      error.message
-    );
-
-    lastError =
-      error.message;
+    });
 
   }
-}
-
-/*
-========================================
-GROUP LIST
-========================================
-*/
-
-async function sendGroupsList(
-  chat
-) {
-
-  let text =
-    "📋 *WHATSAPP GROUPS*\n\n";
-
-  if (!allGroups.length) {
-
-    text +=
-      "❌ Abhi groups detect nahi hue.";
-
-  } else {
-
-    allGroups.forEach(
-      (group, index) => {
-
-        const target =
-          savedGroups.some(
-            g =>
-              g.jid === group.jid
-          );
-
-        text +=
-          `${index + 1}. ${group.name}`;
-
-        if (target) {
-          text +=
-            " ✅ TARGET";
-        }
-
-        text += "\n";
-
-      }
-    );
-
-  }
-
-  await sock.sendMessage(
-    chat,
-    {
-      text
-    }
-  );
-}
-
-/*
-========================================
-REPORT
-========================================
-*/
-
-async function sendReport(
-  groupJid
-) {
-
-  try {
-
-    const meta =
-      await sock.groupMetadata(
-        groupJid
-      );
-
-    const members =
-      meta.participants.map(
-        p =>
-          p.id
-      );
-
-    const groupData =
-      messageLog[groupJid] || {};
-
-    const start =
-      botState.cycleStart;
-
-    let text =
-      `📊 *${REPORT_DAYS} DIN KI REPORT*\n\n`;
-
-    text +=
-      `👥 *GROUP:* ${meta.subject}\n`;
-
-    text +=
-      `🗓 *Start:* ${
-        new Date(start)
-          .toLocaleDateString(
-            "en-GB"
-          )
-      }\n\n`;
-
-    const active = [];
-    const inactive = [];
-
-    for (
-      const member
-      of members
-    ) {
-
-      const count =
-        (
-          groupData[member] ||
-          []
-        ).filter(
-          time =>
-            time >= start
-        ).length;
-
-      if (count > 0) {
-
-        active.push([
-          member,
-          count
-        ]);
-
-      } else {
-
-        inactive.push(
-          member
-        );
-
-      }
-
-    }
-
-    active.sort(
-      (a, b) =>
-        b[1] - a[1]
-    );
-
-    text +=
-      "✅ *ACTIVE MEMBERS:*\n\n";
-
-    if (!active.length) {
-
-      text +=
-        "Kisi ne message nahi kiya 😅\n";
-
-    } else {
-
-      for (
-        const [
-          member,
-          count
-        ]
-        of active
-      ) {
-
-        text +=
-          `📱 ${formatNumber(
-            member
-          )} — *${count}* messages\n`;
-
-      }
-
-    }
-
-    text +=
-      `\n❌ *${REPORT_DAYS} DIN ME 0 MESSAGES:*\n\n`;
-
-    if (!inactive.length) {
-
-      text +=
-        "Koi nahi — sab active ✅\n";
-
-    } else {
-
-      for (
-        const member
-        of inactive
-      ) {
-
-        text +=
-          `📱 ${formatNumber(
-            member
-          )} — *0* messages 🚫\n`;
-
-      }
-
-    }
-
-    await sock.sendMessage(
-      groupJid,
-      {
-        text
-      }
-    );
-
-    console.log(
-      "✅ Report sent:",
-      meta.subject
-    );
-
-  } catch (error) {
-
-    console.log(
-      "❌ Report error:",
-      error.message
-    );
-
-  }
-}
+);
 
 /*
 ========================================
@@ -2103,7 +2990,8 @@ async function startBot() {
     return;
   }
 
-  reconnecting = true;
+  reconnecting =
+    true;
 
   try {
 
@@ -2130,7 +3018,8 @@ async function startBot() {
 
         logger:
           pino({
-            level: "silent"
+            level:
+              "silent"
           }),
 
         auth: {
@@ -2142,7 +3031,8 @@ async function startBot() {
             makeCacheableSignalKeyStore(
               state.keys,
               pino({
-                level: "silent"
+                level:
+                  "silent"
               })
             )
 
@@ -2204,7 +3094,8 @@ async function startBot() {
         }
 
         if (
-          connection === "open"
+          connection ===
+          "open"
         ) {
 
           latestQR =
@@ -2277,7 +3168,8 @@ async function startBot() {
         }
 
         if (
-          connection === "close"
+          connection ===
+          "close"
         ) {
 
           ownerJid =
@@ -2349,299 +3241,383 @@ async function startBot() {
     sock.ev.on(
       "messages.upsert",
       async ({
-        messages
+        messages,
+        type
       }) => {
 
         try {
 
-          const msg =
-            messages[0];
-
           if (
-            !msg ||
-            !msg.message
-          ) {
-            return;
-          }
-
-          const chat =
-            msg.key.remoteJid;
-
-          if (!chat) {
-            return;
-          }
-
-          if (
-            !chat.endsWith("@g.us")
+            !messages ||
+            !messages.length
           ) {
             return;
           }
 
           /*
-          ========================================
-          SENDER INFORMATION
-          ========================================
-          */
-
-          const senderPhone =
-            msg.key.participantAlt ||
-            msg.key.senderPn ||
-            null;
-
-          const senderLid =
-            msg.key.participant ||
-            null;
-
-          /*
-          ========================================
-          OWNER
-          ========================================
-          */
-
-          const ownerPhone =
-            ownerJid
-              ? normalizeJid(
-                  ownerJid
-                )
-              : null;
-
-          const phoneNormalized =
-            senderPhone
-              ? normalizeJid(
-                  senderPhone
-                )
-              : null;
-
-          /*
-          fromMe = linked WhatsApp
-          */
-
-          const isOwner =
-            msg.key.fromMe === true ||
-            (
-              ownerPhone &&
-              phoneNormalized &&
-              phoneNormalized ===
-                ownerPhone
-            );
-
-          /*
-          ========================================
-          TEXT
-          ========================================
-          */
-
-          const text =
-            msg.message.conversation ||
-            msg.message.extendedTextMessage?.text ||
-            msg.message.imageMessage?.caption ||
-            msg.message.videoMessage?.caption ||
-            "";
-
-          const command =
-            String(text)
-              .trim()
-              .toLowerCase();
-
-          /*
-          ========================================
-          !RANA
-          ========================================
+          Only live messages.
           */
 
           if (
-            command === "!rana"
+            type !==
+            "notify"
+          ) {
+            return;
+          }
+
+          for (
+            const msg
+            of messages
           ) {
 
-            console.log(
-              "📊 !rana received"
-            );
+            if (
+              !msg ||
+              !msg.message
+            ) {
+              continue;
+            }
 
-            if (!isOwner) {
+            const chat =
+              msg.key.remoteJid;
 
-              console.log(
-                "⛔ Unauthorized !rana:",
-                senderLid ||
-                senderPhone ||
-                "unknown"
-              );
-
-              return;
+            if (!chat) {
+              continue;
             }
 
             if (
-              !isTargetGroup(chat)
+              !chat.endsWith(
+                "@g.us"
+              )
+            ) {
+              continue;
+            }
+
+            /*
+            ========================================
+            SENDER IDs
+            ========================================
+            */
+
+            const senderLid =
+              msg.key.participant ||
+              null;
+
+            const senderPhone =
+              msg.key.participantAlt ||
+              msg.key.senderPn ||
+              null;
+
+            /*
+            Save LID ↔ PHONE
+            */
+
+            let identityChanged =
+              false;
+
+            if (
+              rememberIdentity(
+                senderLid,
+                senderPhone
+              )
+            ) {
+
+              identityChanged =
+                true;
+
+            }
+
+            if (identityChanged) {
+
+              saveJSON(
+                LID_MAP_FILE,
+                lidMap
+              );
+
+            }
+
+            /*
+            ========================================
+            OWNER CHECK
+            ========================================
+            */
+
+            const ownerNormalized =
+              ownerJid
+                ? normalizeJid(
+                    ownerJid
+                  )
+                : null;
+
+            const phoneNormalized =
+              senderPhone
+                ? normalizeJid(
+                    senderPhone
+                  )
+                : null;
+
+            const isOwner =
+              msg.key.fromMe === true ||
+              (
+                ownerNormalized &&
+                phoneNormalized &&
+                ownerNormalized ===
+                  phoneNormalized
+              );
+
+            /*
+            ========================================
+            TEXT
+            ========================================
+            */
+
+            const text =
+              msg.message
+                .conversation ||
+              msg.message
+                .extendedTextMessage
+                ?.text ||
+              msg.message
+                .imageMessage
+                ?.caption ||
+              msg.message
+                .videoMessage
+                ?.caption ||
+              "";
+
+            const command =
+              String(text)
+                .trim()
+                .toLowerCase();
+
+            /*
+            ========================================
+            !RANA
+            ========================================
+            */
+
+            if (
+              command ===
+              "!rana"
             ) {
 
               console.log(
-                "⚠️ !rana used in non-target group"
+                "📊 !rana received"
               );
 
-              return;
-            }
+              if (!isOwner) {
 
-            console.log(
-              "✅ Authorized !rana"
-            );
+                console.log(
+                  "⛔ Unauthorized !rana:",
+                  senderLid ||
+                  senderPhone ||
+                  "unknown"
+                );
 
-            await sendReport(
-              chat
-            );
+                continue;
+              }
 
-            return;
-          }
+              if (
+                !isTargetGroup(
+                  chat
+                )
+              ) {
 
-          /*
-          ========================================
-          !STATS
-          ========================================
-          */
+                console.log(
+                  "⚠️ !rana used in non-target group"
+                );
 
-          if (
-            command === "!stats"
-          ) {
-
-            if (!isOwner) {
+                continue;
+              }
 
               console.log(
-                "⛔ Unauthorized !stats:",
-                senderLid ||
-                senderPhone ||
-                "unknown"
+                "✅ Authorized !rana"
               );
 
-              return;
+              await sendReport(
+                chat
+              );
+
+              continue;
+            }
+
+            /*
+            ========================================
+            !STATS
+            ========================================
+            */
+
+            if (
+              command ===
+              "!stats"
+            ) {
+
+              if (!isOwner) {
+
+                console.log(
+                  "⛔ Unauthorized !stats:",
+                  senderLid ||
+                  senderPhone ||
+                  "unknown"
+                );
+
+                continue;
+              }
+
+              if (
+                !isTargetGroup(
+                  chat
+                )
+              ) {
+
+                continue;
+              }
+
+              console.log(
+                "✅ Authorized !stats"
+              );
+
+              await sendReport(
+                chat
+              );
+
+              continue;
+            }
+
+            /*
+            ========================================
+            !GROUPS
+            ========================================
+            */
+
+            if (
+              command ===
+              "!groups"
+            ) {
+
+              if (!isOwner) {
+
+                console.log(
+                  "⛔ Unauthorized !groups"
+                );
+
+                continue;
+              }
+
+              await sendGroupsList(
+                chat
+              );
+
+              continue;
+            }
+
+            /*
+            ========================================
+            IGNORE BOT OWN NORMAL MESSAGE
+            ========================================
+            */
+
+            if (
+              msg.key.fromMe
+            ) {
+              continue;
+            }
+
+            /*
+            ========================================
+            TARGET GROUP
+            ========================================
+            */
+
+            if (
+              !isTargetGroup(
+                chat
+              )
+            ) {
+              continue;
+            }
+
+            /*
+            ========================================
+            SENDER
+            ========================================
+            */
+
+            const sender =
+              isPhoneJid(
+                senderPhone
+              )
+                ? normalizeJid(
+                    senderPhone
+                  )
+                : normalizeJid(
+                    senderLid
+                  );
+
+            if (!sender) {
+              continue;
+            }
+
+            /*
+            ========================================
+            SAVE MESSAGE
+            ========================================
+            */
+
+            if (
+              !messageLog[chat]
+            ) {
+
+              messageLog[chat] =
+                {};
+
             }
 
             if (
-              !isTargetGroup(chat)
+              !messageLog[chat][sender]
             ) {
 
-              console.log(
-                "⚠️ !stats used in non-target group"
+              messageLog[chat][sender] =
+                [];
+
+            }
+
+            const timestamp =
+              Number(
+                msg.messageTimestamp ||
+                0
+              ) * 1000;
+
+            messageLog[chat][sender]
+              .push(
+                timestamp ||
+                Date.now()
               );
 
-              return;
-            }
+            saveData();
 
             console.log(
-              "✅ Authorized !stats"
+              `💬 ${savedGroups.find(
+                g =>
+                  g.jid === chat
+              )?.name || chat}`
             );
 
-            await sendReport(
-              chat
+            console.log(
+              `   📱 ${formatNumber(
+                sender
+              )}`
             );
 
-            return;
-          }
-
-          /*
-          ========================================
-          !GROUPS
-          ========================================
-          */
-
-          if (
-            command === "!groups"
-          ) {
-
-            if (!isOwner) {
-
-              console.log(
-                "⛔ Unauthorized !groups"
-              );
-
-              return;
-            }
-
-            await sendGroupsList(
-              chat
+            console.log(
+              `   💬 ${messageLog[chat][sender].length} messages`
             );
 
-            return;
           }
-
-          /*
-          ========================================
-          IGNORE BOT'S OWN NORMAL MESSAGE
-          ========================================
-          */
-
-          if (
-            msg.key.fromMe
-          ) {
-            return;
-          }
-
-          /*
-          ========================================
-          TARGET GROUP ONLY
-          ========================================
-          */
-
-          if (
-            !isTargetGroup(chat)
-          ) {
-            return;
-          }
-
-          /*
-          ========================================
-          SENDER
-          ========================================
-          */
-
-          const sender =
-            senderPhone ||
-            senderLid ||
-            msg.key.remoteJid;
-
-          if (!sender) {
-            return;
-          }
-
-          /*
-          ========================================
-          SAVE MESSAGE
-          ========================================
-          */
-
-          if (
-            !messageLog[chat]
-          ) {
-
-            messageLog[chat] =
-              {};
-
-          }
-
-          if (
-            !messageLog[chat][sender]
-          ) {
-
-            messageLog[chat][sender] =
-              [];
-
-          }
-
-          const timestamp =
-            Number(
-              msg.messageTimestamp ||
-              0
-            ) * 1000;
-
-          messageLog[chat][sender]
-            .push(
-              timestamp ||
-              Date.now()
-            );
-
-          saveData();
 
         } catch (error) {
 
           console.log(
-            "Message error:",
+            "❌ Message error:",
             error.message
           );
 
@@ -2653,7 +3629,7 @@ async function startBot() {
   } catch (error) {
 
     console.log(
-      "Start error:",
+      "❌ START ERROR:",
       error.message
     );
 
@@ -2672,20 +3648,6 @@ async function startBot() {
     );
 
   }
-}
-
-/*
-========================================
-TARGET GROUP CHECK
-========================================
-*/
-
-function isTargetGroup(jid) {
-
-  return savedGroups.some(
-    group =>
-      group.jid === jid
-  );
 
 }
 
@@ -2706,7 +3668,7 @@ setInterval(
     ) {
 
       console.log(
-        "♻️ QR expired."
+        "♻️ QR EXPIRED — REFRESHING"
       );
 
       latestQR =
@@ -2785,7 +3747,8 @@ setInterval(
           1000;
 
       if (
-        Date.now() >= end
+        Date.now() >=
+        end
       ) {
 
         if (
@@ -2827,7 +3790,7 @@ setInterval(
     } catch (error) {
 
       console.log(
-        "Auto report error:",
+        "❌ AUTO REPORT ERROR:",
         error.message
       );
 
@@ -2857,8 +3820,7 @@ app.listen(
     );
 
     console.log(
-      "🌐 PORT:",
-      PORT
+      "💎 PREMIUM DASHBOARD: ON"
     );
 
     console.log(
@@ -2866,15 +3828,32 @@ app.listen(
     );
 
     console.log(
+      "🔗 LID ↔ PHONE MAPPING: ON"
+    );
+
+    console.log(
+      "📊 LIVE MESSAGE COUNTING: ON"
+    );
+
+    console.log(
+      "⚡ !RANA REPORT: ON"
+    );
+
+    console.log(
+      "📈 !STATS REPORT: ON"
+    );
+
+    console.log(
+      "⏰ 7-DAY AUTO REPORT: ON"
+    );
+
+    console.log(
       "🔄 GROUP RESCAN: 30 SEC"
     );
 
     console.log(
-      "📊 7-DAY REPORT: ON"
-    );
-
-    console.log(
-      "⚡ !RANA COMMAND: ON"
+      "🌐 PORT:",
+      PORT
     );
 
     console.log(

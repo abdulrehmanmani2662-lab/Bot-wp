@@ -9,11 +9,11 @@ const pino = require("pino");
 const QRCode = require("qrcode");
 const express = require("express");
 const fs = require("fs");
+const path = require("path");
 
 // ================= CONFIG =================
 
 const PORT = process.env.PORT || 3000;
-
 const REPORT_DAYS = 7;
 
 const TARGET_GROUP_NAMES = [
@@ -21,37 +21,32 @@ const TARGET_GROUP_NAMES = [
   "test"
 ];
 
-// Render Persistent Disk
-const BASE = "/var/data";
+// ================= FREE RENDER STORAGE =================
 
-const AUTH_DIR = `${BASE}/auth`;
-const DATA_DIR = `${BASE}/data`;
+const BASE = __dirname;
 
-const LOG_FILE = `${DATA_DIR}/messageLog.json`;
-const STATE_FILE = `${DATA_DIR}/botState.json`;
-const GROUP_FILE = `${DATA_DIR}/groups.json`;
+const AUTH_DIR = path.join(BASE, "auth");
+const DATA_DIR = path.join(BASE, "data");
 
-// ================= FOLDERS =================
+const LOG_FILE = path.join(DATA_DIR, "messageLog.json");
+const STATE_FILE = path.join(DATA_DIR, "botState.json");
+const GROUP_FILE = path.join(DATA_DIR, "groups.json");
 
-for (const dir of [BASE, AUTH_DIR, DATA_DIR]) {
+// Create folders
+for (const dir of [AUTH_DIR, DATA_DIR]) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }
 
-// ================= DATA =================
-
-let messageLog = {};
-let botState = {
-  cycleStart: Date.now()
-};
-
-let savedGroups = [];
+// ================= JSON =================
 
 function loadJSON(file, fallback) {
   try {
     if (fs.existsSync(file)) {
-      return JSON.parse(fs.readFileSync(file, "utf8"));
+      return JSON.parse(
+        fs.readFileSync(file, "utf8")
+      );
     }
   } catch (e) {
     console.log("JSON load error:", e.message);
@@ -60,12 +55,16 @@ function loadJSON(file, fallback) {
   return fallback;
 }
 
-messageLog = loadJSON(LOG_FILE, {});
-botState = loadJSON(STATE_FILE, {
-  cycleStart: Date.now()
-});
+let messageLog =
+  loadJSON(LOG_FILE, {});
 
-savedGroups = loadJSON(GROUP_FILE, []);
+let botState =
+  loadJSON(STATE_FILE, {
+    cycleStart: Date.now()
+  });
+
+let savedGroups =
+  loadJSON(GROUP_FILE, []);
 
 // ================= SAVE =================
 
@@ -86,7 +85,10 @@ function saveData() {
       JSON.stringify(savedGroups)
     );
   } catch (e) {
-    console.log("Save error:", e.message);
+    console.log(
+      "Save error:",
+      e.message
+    );
   }
 }
 
@@ -121,11 +123,12 @@ let sock = null;
 let ownerJid = null;
 let latestQR = null;
 
-// ================= WEB SERVER =================
+// ================= WEB =================
 
 const app = express();
 
 app.get("/", (req, res) => {
+
   res.send(`
 <!DOCTYPE html>
 <html>
@@ -141,7 +144,7 @@ font-family:Arial;
 padding:40px;
 ">
 
-<h1>🤖 WhatsApp 7-Day Report Bot</h1>
+<h1>🤖 WhatsApp Report Bot</h1>
 
 <p>
 ${
@@ -170,6 +173,7 @@ display:inline-block;
 </body>
 </html>
 `);
+
 });
 
 app.get("/qr", async (req, res) => {
@@ -190,21 +194,22 @@ padding:40px;
 
 <h2>📱 QR Available Nahi Hai</h2>
 
-<p>
-Bot already connected ho sakta hai.
-</p>
+<p>Bot already connected ho sakta hai.</p>
 
 <meta http-equiv="refresh" content="5">
 
 </body>
 </html>
 `);
+
   }
 
   try {
 
     const image =
-      await QRCode.toDataURL(latestQR);
+      await QRCode.toDataURL(
+        latestQR
+      );
 
     res.send(`
 <!DOCTYPE html>
@@ -234,12 +239,13 @@ padding:10px;
 border-radius:10px;
 ">
 
-<p>
-QR Scan Karein
-</p>
+<p>QR Scan Karein</p>
 
 <script>
-setTimeout(() => location.reload(), 15000);
+setTimeout(
+  () => location.reload(),
+  15000
+);
 </script>
 
 </body>
@@ -248,9 +254,12 @@ setTimeout(() => location.reload(), 15000);
 
   } catch (e) {
 
-    res.send("QR error: " + e.message);
+    res.send(
+      "QR error: " + e.message
+    );
 
   }
+
 });
 
 app.get("/health", (req, res) => {
@@ -260,10 +269,7 @@ app.get("/health", (req, res) => {
     whatsapp: ownerJid
       ? "connected"
       : "waiting",
-
-    groups: savedGroups.length,
-
-    targetGroups: TARGET_GROUP_NAMES
+    groups: savedGroups.length
   });
 
 });
@@ -297,7 +303,10 @@ async function findTargetGroups() {
       const normalized =
         normalizeGroupName(groupName);
 
-      for (const targetName of TARGET_GROUP_NAMES) {
+      for (
+        const targetName
+        of TARGET_GROUP_NAMES
+      ) {
 
         if (
           normalized ===
@@ -323,13 +332,15 @@ async function findTargetGroups() {
 
     }
 
-    // Maximum 2 groups
-    savedGroups = found.slice(0, 2);
+    savedGroups =
+      found.slice(0, 2);
 
     saveData();
 
     console.log("");
-    console.log("========== GROUPS ==========");
+    console.log(
+      "========== GROUPS =========="
+    );
 
     if (!savedGroups.length) {
 
@@ -339,21 +350,25 @@ async function findTargetGroups() {
 
     } else {
 
-      savedGroups.forEach((g, i) => {
+      savedGroups.forEach(
+        (g, i) => {
 
-        console.log(
-          `GROUP ${i + 1}: ${g.name}`
-        );
+          console.log(
+            `GROUP ${i + 1}: ${g.name}`
+          );
 
-        console.log(
-          `JID: ${g.jid}`
-        );
+          console.log(
+            `JID: ${g.jid}`
+          );
 
-      });
+        }
+      );
 
     }
 
-    console.log("============================");
+    console.log(
+      "============================"
+    );
     console.log("");
 
   } catch (e) {
@@ -367,7 +382,7 @@ async function findTargetGroups() {
 
 }
 
-// ================= IS TARGET GROUP =================
+// ================= CHECK GROUP =================
 
 function isTargetGroup(jid) {
 
@@ -377,36 +392,39 @@ function isTargetGroup(jid) {
 
 }
 
-// ================= SEND GROUP LIST =================
+// ================= GROUP LIST =================
 
 async function sendGroupsList(chat) {
 
   let text =
-    "📋 *BOT KE 2 GROUPS*\n\n";
+    "📋 *BOT KE GROUPS*\n\n";
 
   if (!savedGroups.length) {
 
     text +=
-      "❌ Abhi koi target group nahi mila.";
+      "❌ Abhi groups detect nahi hue.";
 
   } else {
 
-    savedGroups.forEach((g, i) => {
+    savedGroups.forEach(
+      (g, i) => {
 
-      text +=
-        `${i + 1}. ${g.name}\n`;
+        text +=
+          `${i + 1}. ${g.name}\n`;
 
-    });
+      }
+    );
 
   }
 
-  await sock.sendMessage(chat, {
-    text
-  });
+  await sock.sendMessage(
+    chat,
+    { text }
+  );
 
 }
 
-// ================= MESSAGE REPORT =================
+// ================= REPORT =================
 
 async function sendReport(groupJid) {
 
@@ -443,14 +461,16 @@ async function sendReport(groupJid) {
     const active = [];
     const inactive = [];
 
-    for (const member of members) {
+    for (
+      const member
+      of members
+    ) {
 
       const count =
         (groupData[member] || [])
-        .filter(
-          t => t >= start
-        )
-        .length;
+          .filter(
+            t => t >= start
+          ).length;
 
       if (count > 0) {
 
@@ -638,7 +658,6 @@ async function startBot() {
             "================================"
           );
 
-          // Find the 2 required groups
           await findTargetGroups();
 
         }
@@ -694,7 +713,6 @@ async function startBot() {
 
           if (!chat) return;
 
-          // Only groups
           if (
             !chat.endsWith("@g.us")
           ) return;
@@ -718,8 +736,7 @@ async function startBot() {
               .trim()
               .toLowerCase();
 
-          // ================= OWNER COMMANDS =================
-
+          // Owner command
           if (
             ownerJid &&
             normalizeJid(sender) ===
@@ -740,8 +757,7 @@ async function startBot() {
 
           }
 
-          // ================= TARGET GROUP =================
-
+          // Only target groups
           if (
             !isTargetGroup(chat)
           ) {
@@ -750,8 +766,7 @@ async function startBot() {
 
           }
 
-          // ================= SAVE MESSAGE =================
-
+          // Save message
           if (
             !messageLog[chat]
           ) {
@@ -784,8 +799,7 @@ async function startBot() {
 
           saveData();
 
-          // ================= !STATS =================
-
+          // !stats
           if (
             command !== "!stats"
           ) {
@@ -826,7 +840,7 @@ async function startBot() {
       }
     );
 
-    // ================= 7 DAY AUTO REPORT =================
+    // ================= 7 DAY REPORT =================
 
     setInterval(
       async () => {
@@ -854,7 +868,6 @@ async function startBot() {
                 "⏰ 7 days complete."
               );
 
-              // Send report to both groups
               for (
                 const group
                 of savedGroups
@@ -866,7 +879,6 @@ async function startBot() {
 
               }
 
-              // New cycle
               botState.cycleStart =
                 Date.now();
 

@@ -14,12 +14,41 @@ const path = require("path");
 const { createClient } = require("@supabase/supabase-js");
 
 /*
-========================================
-CONFIG
-========================================
+========================================================
+WHATSAPP REPORT BOT
+========================================================
+
+FEATURES:
+
+1. 7-day activity cycle
+2. Target group auto detection
+3. Group report
+4. Private warning for 0-message members
+5. Second consecutive 0-message period = removal attempt
+6. Warning clears immediately when member becomes active
+7. Admins are protected from removal
+8. Bot/owner protected
+9. LID <-> phone mapping
+10. Supabase persistence
+11. Local JSON persistence
+12. QR dashboard
+13. !rana
+14. !stats
+15. !groups
+16. Automatic group rescanning
+17. Automatic reconnection
+
+========================================================
 */
 
-const PORT = process.env.PORT || 3000;
+/*
+========================================================
+CONFIG
+========================================================
+*/
+
+const PORT =
+  process.env.PORT || 3000;
 
 const REPORT_DAYS = 7;
 
@@ -29,9 +58,9 @@ const TARGET_GROUP_NAMES = [
 ];
 
 /*
-========================================
+========================================================
 SUPABASE
-========================================
+========================================================
 */
 
 const SUPABASE_URL =
@@ -50,40 +79,66 @@ const supabase =
     : null;
 
 /*
-========================================
-LOCAL FILES
-========================================
+========================================================
+LOCAL DIRECTORIES
+========================================================
 */
 
-const BASE = __dirname;
+const BASE =
+  __dirname;
 
 const AUTH_DIR =
-  path.join(BASE, "auth");
+  path.join(
+    BASE,
+    "auth"
+  );
 
 const DATA_DIR =
-  path.join(BASE, "data");
+  path.join(
+    BASE,
+    "data"
+  );
 
-if (!fs.existsSync(AUTH_DIR)) {
-  fs.mkdirSync(AUTH_DIR, {
-    recursive: true
-  });
+if (
+  !fs.existsSync(
+    AUTH_DIR
+  )
+) {
+  fs.mkdirSync(
+    AUTH_DIR,
+    {
+      recursive: true
+    }
+  );
 }
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, {
-    recursive: true
-  });
+if (
+  !fs.existsSync(
+    DATA_DIR
+  )
+) {
+  fs.mkdirSync(
+    DATA_DIR,
+    {
+      recursive: true
+    }
+  );
 }
 
 /*
-========================================
-LOCAL JSON HELPERS
-========================================
+========================================================
+JSON HELPERS
+========================================================
 */
 
-function loadJSON(file, fallback) {
+function loadJSON(
+  file,
+  fallback
+) {
   try {
-    if (fs.existsSync(file)) {
+    if (
+      fs.existsSync(file)
+    ) {
       return JSON.parse(
         fs.readFileSync(
           file,
@@ -101,7 +156,10 @@ function loadJSON(file, fallback) {
   return fallback;
 }
 
-function saveJSON(file, data) {
+function saveJSON(
+  file,
+  data
+) {
   try {
     fs.writeFileSync(
       file,
@@ -120,9 +178,9 @@ function saveJSON(file, data) {
 }
 
 /*
-========================================
-LOCAL DATA
-========================================
+========================================================
+DATA FILES
+========================================================
 */
 
 const STATE_FILE =
@@ -155,6 +213,12 @@ const WARNING_FILE =
     "warnings.json"
   );
 
+/*
+========================================================
+LOAD LOCAL DATA
+========================================================
+*/
+
 let botState =
   loadJSON(
     STATE_FILE,
@@ -182,25 +246,6 @@ let lidMap =
     {}
   );
 
-/*
-========================================
-WARNING DATA
-========================================
-
-Structure:
-
-warnings[groupJid][memberJid] = {
-  warnedAt: timestamp
-}
-
-If member sends a message during the
-next cycle, warning is removed.
-
-If still 0 at next report:
-member will be removed.
-========================================
-*/
-
 let warnings =
   loadJSON(
     WARNING_FILE,
@@ -208,17 +253,24 @@ let warnings =
   );
 
 /*
-========================================
+========================================================
 MESSAGE LOG
-========================================
+
+messageLog[groupJid][memberJid] = [
+  timestamp,
+  timestamp,
+  timestamp
+]
+
+========================================================
 */
 
 let messageLog = {};
 
 /*
-========================================
-SUPABASE STORAGE
-========================================
+========================================================
+SUPABASE LOAD
+========================================================
 */
 
 async function loadCloudData() {
@@ -226,7 +278,7 @@ async function loadCloudData() {
   if (!supabase) {
 
     console.log(
-      "⚠️ Supabase variables not configured yet."
+      "⚠️ Supabase variables not configured."
     );
 
     return;
@@ -234,9 +286,14 @@ async function loadCloudData() {
 
   try {
 
-    const { data, error } =
+    const {
+      data,
+      error
+    } =
       await supabase
-        .from("bot_storage")
+        .from(
+          "bot_storage"
+        )
         .select(
           "key,value"
         );
@@ -246,68 +303,71 @@ async function loadCloudData() {
     }
 
     for (
-      const row of data || []
+      const row
+      of data || []
     ) {
 
       if (
         row.key ===
         "messageLog"
       ) {
-
         messageLog =
           row.value || {};
-
       }
 
       if (
         row.key ===
         "botState"
       ) {
-
         botState =
-          row.value || botState;
-
+          row.value ||
+          botState;
       }
 
       if (
         row.key ===
         "savedGroups"
       ) {
-
         savedGroups =
           row.value || [];
-
       }
 
       if (
         row.key ===
         "allGroups"
       ) {
-
         allGroups =
           row.value || [];
-
       }
 
       if (
         row.key ===
         "lidMap"
       ) {
-
         lidMap =
           row.value || {};
-
       }
 
       if (
         row.key ===
         "warnings"
       ) {
-
         warnings =
           row.value || {};
-
       }
+
+    }
+
+    /*
+    Make sure cycleStart exists.
+    */
+
+    if (
+      !botState.cycleStart
+    ) {
+
+      botState.cycleStart =
+        Date.now();
 
     }
 
@@ -326,6 +386,12 @@ async function loadCloudData() {
 
 }
 
+/*
+========================================================
+SUPABASE SAVE
+========================================================
+*/
+
 async function saveCloud(
   key,
   value
@@ -337,15 +403,20 @@ async function saveCloud(
 
   try {
 
-    const { error } =
+    const {
+      error
+    } =
       await supabase
-        .from("bot_storage")
+        .from(
+          "bot_storage"
+        )
         .upsert(
           {
             key,
             value,
             updated_at:
-              new Date().toISOString()
+              new Date()
+                .toISOString()
           },
           {
             onConflict:
@@ -368,44 +439,10 @@ async function saveCloud(
 
 }
 
-async function saveAllCloud() {
-
-  await saveCloud(
-    "messageLog",
-    messageLog
-  );
-
-  await saveCloud(
-    "botState",
-    botState
-  );
-
-  await saveCloud(
-    "savedGroups",
-    savedGroups
-  );
-
-  await saveCloud(
-    "allGroups",
-    allGroups
-  );
-
-  await saveCloud(
-    "lidMap",
-    lidMap
-  );
-
-  await saveCloud(
-    "warnings",
-    warnings
-  );
-
-}
-
 /*
-========================================
-SAVE ALL
-========================================
+========================================================
+SAVE ALL DATA
+========================================================
 */
 
 async function saveData() {
@@ -468,40 +505,56 @@ async function saveData() {
 }
 
 /*
-========================================
+========================================================
 JID HELPERS
-========================================
+========================================================
 */
 
-function normalizeJid(jid) {
+function normalizeJid(
+  jid
+) {
 
-  return String(jid || "")
+  return String(
+    jid || ""
+  )
     .trim()
     .split(":")[0]
     .toLowerCase();
 
 }
 
-function isLid(jid) {
+function isLid(
+  jid
+) {
 
-  return normalizeJid(jid)
-    .endsWith("@lid");
-
-}
-
-function isPhoneJid(jid) {
-
-  return normalizeJid(jid)
-    .endsWith(
-      "@s.whatsapp.net"
-    );
+  return normalizeJid(
+    jid
+  ).endsWith(
+    "@lid"
+  );
 
 }
 
-function phoneNumberFromJid(jid) {
+function isPhoneJid(
+  jid
+) {
+
+  return normalizeJid(
+    jid
+  ).endsWith(
+    "@s.whatsapp.net"
+  );
+
+}
+
+function phoneNumberFromJid(
+  jid
+) {
 
   const n =
-    normalizeJid(jid);
+    normalizeJid(
+      jid
+    );
 
   if (
     n.endsWith(
@@ -520,10 +573,14 @@ function phoneNumberFromJid(jid) {
 
 }
 
-function formatNumber(jid) {
+function formatNumber(
+  jid
+) {
 
   const n =
-    normalizeJid(jid);
+    normalizeJid(
+      jid
+    );
 
   if (
     n.endsWith(
@@ -539,7 +596,9 @@ function formatNumber(jid) {
   }
 
   if (
-    n.endsWith("@c.us")
+    n.endsWith(
+      "@c.us"
+    )
   ) {
 
     return n.replace(
@@ -550,7 +609,9 @@ function formatNumber(jid) {
   }
 
   if (
-    n.endsWith("@lid")
+    n.endsWith(
+      "@lid"
+    )
   ) {
 
     return n.replace(
@@ -565,9 +626,9 @@ function formatNumber(jid) {
 }
 
 /*
-========================================
-LID ↔ PHONE
-========================================
+========================================================
+LID -> PHONE MEMORY
+========================================================
 */
 
 function rememberIdentity(
@@ -576,20 +637,28 @@ function rememberIdentity(
 ) {
 
   const l =
-    normalizeJid(lid);
+    normalizeJid(
+      lid
+    );
 
   const p =
-    normalizeJid(phone);
+    normalizeJid(
+      phone
+    );
 
   if (!l || !p) {
     return false;
   }
 
-  if (!isLid(l)) {
+  if (
+    !isLid(l)
+  ) {
     return false;
   }
 
-  if (!isPhoneJid(p)) {
+  if (
+    !isPhoneJid(p)
+  ) {
     return false;
   }
 
@@ -597,7 +666,8 @@ function rememberIdentity(
     lidMap[l] !== p
   ) {
 
-    lidMap[l] = p;
+    lidMap[l] =
+      p;
 
     return true;
 
@@ -607,16 +677,28 @@ function rememberIdentity(
 
 }
 
-function getPhoneFromAnyId(id) {
+/*
+========================================================
+GET PHONE FROM ANY ID
+========================================================
+*/
+
+function getPhoneFromAnyId(
+  id
+) {
 
   const n =
-    normalizeJid(id);
+    normalizeJid(
+      id
+    );
 
   if (!n) {
     return null;
   }
 
-  if (isPhoneJid(n)) {
+  if (
+    isPhoneJid(n)
+  ) {
 
     return phoneNumberFromJid(
       n
@@ -639,6 +721,12 @@ function getPhoneFromAnyId(id) {
 
 }
 
+/*
+========================================================
+MEMBER NUMBER
+========================================================
+*/
+
 function getMemberNumber(
   participant
 ) {
@@ -650,10 +738,13 @@ function getMemberNumber(
   ];
 
   for (
-    const id of candidates
+    const id
+    of candidates
   ) {
 
-    if (isPhoneJid(id)) {
+    if (
+      isPhoneJid(id)
+    ) {
 
       return `+${formatNumber(id)}`;
 
@@ -662,11 +753,14 @@ function getMemberNumber(
   }
 
   for (
-    const id of candidates
+    const id
+    of candidates
   ) {
 
     const phone =
-      getPhoneFromAnyId(id);
+      getPhoneFromAnyId(
+        id
+      );
 
     if (phone) {
 
@@ -685,13 +779,9 @@ function getMemberNumber(
 }
 
 /*
-========================================
-PRIVATE JID
-========================================
-
-Warning personal chat mein bhejne
-ke liye phone JID chahiye.
-========================================
+========================================================
+PRIVATE CHAT JID
+========================================================
 */
 
 function getPrivateJid(
@@ -704,12 +794,19 @@ function getPrivateJid(
     participant?.lid
   ];
 
+  /*
+  Direct phone first.
+  */
+
   for (
-    const id of candidates
+    const id
+    of candidates
   ) {
 
     const n =
-      normalizeJid(id);
+      normalizeJid(
+        id
+      );
 
     if (
       isPhoneJid(n)
@@ -721,16 +818,25 @@ function getPrivateJid(
 
   }
 
+  /*
+  LID mapping second.
+  */
+
   for (
-    const id of candidates
+    const id
+    of candidates
   ) {
 
     const phone =
-      getPhoneFromAnyId(id);
+      getPhoneFromAnyId(
+        id
+      );
 
     if (phone) {
 
-      return `${phone}@s.whatsapp.net`;
+      return (
+        `${phone}@s.whatsapp.net`
+      );
 
     }
 
@@ -741,17 +847,21 @@ function getPrivateJid(
 }
 
 /*
-========================================
-GROUP MATCH
-========================================
+========================================================
+GROUP NAME NORMALIZATION
+========================================================
 */
 
 function normalizeGroupName(
   name
 ) {
 
-  return String(name || "")
-    .normalize("NFKC")
+  return String(
+    name || ""
+  )
+    .normalize(
+      "NFKC"
+    )
     .toLowerCase()
     .replace(
       /[\u200B-\u200D\uFEFF]/g,
@@ -764,6 +874,12 @@ function normalizeGroupName(
     .trim();
 
 }
+
+/*
+========================================================
+GROUP MATCH
+========================================================
+*/
 
 function groupMatches(
   actualName,
@@ -780,17 +896,31 @@ function groupMatches(
       targetName
     );
 
-  if (!actual || !target) {
-    return false;
-  }
+  if (
+    !actual ||
+    !target
+  ) {
 
-  if (actual === target) {
-    return true;
+    return false;
+
   }
 
   if (
-    actual.includes(target) ||
-    target.includes(actual)
+    actual ===
+    target
+  ) {
+
+    return true;
+
+  }
+
+  if (
+    actual.includes(
+      target
+    ) ||
+    target.includes(
+      actual
+    )
   ) {
 
     return true;
@@ -818,14 +948,18 @@ function groupMatches(
 }
 
 /*
-========================================
-HTML
-========================================
+========================================================
+HTML ESCAPE
+========================================================
 */
 
-function escapeHTML(text) {
+function escapeHTML(
+  text
+) {
 
-  return String(text || "")
+  return String(
+    text || ""
+  )
     .replace(
       /&/g,
       "&amp;"
@@ -850,9 +984,9 @@ function escapeHTML(text) {
 }
 
 /*
-========================================
+========================================================
 BOT VARIABLES
-========================================
+========================================================
 */
 
 let sock = null;
@@ -876,9 +1010,9 @@ const QR_EXPIRE =
   50000;
 
 /*
-========================================
+========================================================
 EXPRESS
-========================================
+========================================================
 */
 
 const app =
@@ -889,9 +1023,34 @@ app.use(
 );
 
 /*
-========================================
-COUNT
-========================================
+========================================================
+TARGET GROUP CHECK
+========================================================
+*/
+
+function isTargetGroup(
+  jid
+) {
+
+  const normalized =
+    normalizeJid(
+      jid
+    );
+
+  return savedGroups.some(
+    group =>
+      normalizeJid(
+        group.jid
+      ) ===
+      normalized
+  );
+
+}
+
+/*
+========================================================
+GROUP MESSAGE COUNT
+========================================================
 */
 
 function getGroupMessageCount(
@@ -899,8 +1058,9 @@ function getGroupMessageCount(
 ) {
 
   const data =
-    messageLog[groupJid] ||
-    {};
+    messageLog[
+      groupJid
+    ] || {};
 
   let total = 0;
 
@@ -927,24 +1087,15 @@ function getGroupMessageCount(
 }
 
 /*
-========================================
-TARGET
-========================================
-*/
-
-function isTargetGroup(jid) {
-
-  return savedGroups.some(
-    group =>
-      group.jid === jid
-  );
-
-}
-
-/*
-========================================
+========================================================
 MEMBER MESSAGE COUNT
-========================================
+
+Supports:
+- LID
+- phone JID
+- participant ID
+- phoneNumber
+========================================================
 */
 
 function getMessagesForMember(
@@ -962,11 +1113,14 @@ function getMessagesForMember(
   ];
 
   for (
-    const id of ids
+    const id
+    of ids
   ) {
 
     const n =
-      normalizeJid(id);
+      normalizeJid(
+        id
+      );
 
     if (!n) {
       continue;
@@ -989,19 +1143,30 @@ function getMessagesForMember(
 
   }
 
+  /*
+  Reverse mapping:
+  phone -> lid
+  */
+
   for (
-    const [lid, phone]
+    const [
+      lid,
+      phone
+    ]
     of Object.entries(
       lidMap
     )
   ) {
 
     for (
-      const id of ids
+      const id
+      of ids
     ) {
 
       const n =
-        normalizeJid(id);
+        normalizeJid(
+          id
+        );
 
       if (
         isPhoneJid(n) &&
@@ -1011,7 +1176,9 @@ function getMessagesForMember(
       ) {
 
         candidates.add(
-          normalizeJid(lid)
+          normalizeJid(
+            lid
+          )
         );
 
       }
@@ -1043,15 +1210,289 @@ function getMessagesForMember(
   }
 
   return [
-    ...new Set(result)
+    ...new Set(
+      result
+    )
   ];
 
 }
 
 /*
-========================================
-WARNING MESSAGE
-========================================
+========================================================
+WARNING KEY FINDER
+========================================================
+*/
+
+function findWarningKey(
+  groupJid,
+  participant
+) {
+
+  if (
+    !warnings[groupJid]
+  ) {
+
+    return null;
+
+  }
+
+  const privateJid =
+    getPrivateJid(
+      participant
+    );
+
+  const possibleKeys = [
+    participant?.id,
+    participant?.lid,
+    participant?.phoneNumber,
+    privateJid
+  ];
+
+  for (
+    const id
+    of possibleKeys
+  ) {
+
+    const n =
+      normalizeJid(
+        id
+      );
+
+    if (
+      n &&
+      warnings[groupJid][n]
+    ) {
+
+      return n;
+
+    }
+
+  }
+
+  /*
+  Try phone mapping.
+  */
+
+  for (
+    const id
+    of possibleKeys
+  ) {
+
+    const phone =
+      getPhoneFromAnyId(
+        id
+      );
+
+    if (!phone) {
+      continue;
+    }
+
+    const key =
+      `${phone}@s.whatsapp.net`;
+
+    if (
+      warnings[groupJid][key]
+    ) {
+
+      return key;
+
+    }
+
+  }
+
+  return null;
+
+}
+
+/*
+========================================================
+CLEAR MEMBER WARNING
+========================================================
+*/
+
+function clearMemberWarning(
+  groupJid,
+  participant
+) {
+
+  if (
+    !warnings[groupJid]
+  ) {
+
+    return false;
+
+  }
+
+  let changed =
+    false;
+
+  const privateJid =
+    getPrivateJid(
+      participant
+    );
+
+  const possibleKeys = [
+    participant?.id,
+    participant?.lid,
+    participant?.phoneNumber,
+    privateJid
+  ];
+
+  for (
+    const id
+    of possibleKeys
+  ) {
+
+    const n =
+      normalizeJid(
+        id
+      );
+
+    if (
+      n &&
+      warnings[groupJid][n]
+    ) {
+
+      delete warnings[groupJid][n];
+
+      changed =
+        true;
+
+    }
+
+  }
+
+  /*
+  Also clear mapped phone key.
+  */
+
+  for (
+    const id
+    of possibleKeys
+  ) {
+
+    const phone =
+      getPhoneFromAnyId(
+        id
+      );
+
+    if (!phone) {
+      continue;
+    }
+
+    const key =
+      `${phone}@s.whatsapp.net`;
+
+    if (
+      warnings[groupJid][key]
+    ) {
+
+      delete warnings[groupJid][key];
+
+      changed =
+        true;
+
+    }
+
+  }
+
+  return changed;
+
+}
+
+/*
+========================================================
+IS BOT / OWNER
+========================================================
+*/
+
+function isOwnerParticipant(
+  participant
+) {
+
+  if (!ownerJid) {
+    return false;
+  }
+
+  const owner =
+    normalizeJid(
+      ownerJid
+    );
+
+  const candidates = [
+    participant?.id,
+    participant?.lid,
+    participant?.phoneNumber
+  ];
+
+  for (
+    const id
+    of candidates
+  ) {
+
+    const n =
+      normalizeJid(
+        id
+      );
+
+    if (
+      n &&
+      n === owner
+    ) {
+
+      return true;
+
+    }
+
+    const phone =
+      getPhoneFromAnyId(
+        n
+      );
+
+    const ownerPhone =
+      getPhoneFromAnyId(
+        owner
+      );
+
+    if (
+      phone &&
+      ownerPhone &&
+      phone === ownerPhone
+    ) {
+
+      return true;
+
+    }
+
+  }
+
+  return false;
+
+}
+
+/*
+========================================================
+IS ADMIN
+========================================================
+*/
+
+function isAdminParticipant(
+  participant
+) {
+
+  return (
+    participant?.admin ===
+      "admin" ||
+    participant?.admin ===
+      "superadmin"
+  );
+
+}
+
+/*
+========================================================
+PRIVATE WARNING
+========================================================
 */
 
 async function sendPrivateWarning(
@@ -1061,6 +1502,46 @@ async function sendPrivateWarning(
 ) {
 
   try {
+
+    /*
+    Do not warn owner.
+    */
+
+    if (
+      isOwnerParticipant(
+        participant
+      )
+    ) {
+
+      console.log(
+        "⚠️ WARNING SKIPPED - BOT/OWNER"
+      );
+
+      return false;
+
+    }
+
+    /*
+    Admins are not removed, therefore
+    no warning is needed for them.
+    */
+
+    if (
+      isAdminParticipant(
+        participant
+      )
+    ) {
+
+      console.log(
+        "⚠️ WARNING SKIPPED - ADMIN:",
+        getMemberNumber(
+          participant
+        )
+      );
+
+      return false;
+
+    }
 
     const privateJid =
       getPrivateJid(
@@ -1074,24 +1555,6 @@ async function sendPrivateWarning(
         participant?.id ||
         participant?.lid
       );
-
-      return false;
-
-    }
-
-    /*
-    Do not warn bot/owner
-    */
-
-    if (
-      ownerJid &&
-      normalizeJid(
-        privateJid
-      ) ===
-      normalizeJid(
-        ownerJid
-      )
-    ) {
 
       return false;
 
@@ -1133,7 +1596,7 @@ Please group mein kam az kam ek message kar dein taake aap active count ho jayen
     console.log(
       "⚠️ PRIVATE WARNING SENT:",
       number,
-      "FROM:",
+      "| GROUP:",
       groupName
     );
 
@@ -1153,9 +1616,9 @@ Please group mein kam az kam ek message kar dein taake aap active count ho jayen
 }
 
 /*
-========================================
+========================================================
 REMOVE MEMBER
-========================================
+========================================================
 */
 
 async function removeMember(
@@ -1165,6 +1628,45 @@ async function removeMember(
 ) {
 
   try {
+
+    /*
+    Owner protection.
+    */
+
+    if (
+      isOwnerParticipant(
+        participant
+      )
+    ) {
+
+      console.log(
+        "🛡️ REMOVE SKIPPED - OWNER"
+      );
+
+      return false;
+
+    }
+
+    /*
+    Admin protection.
+    */
+
+    if (
+      isAdminParticipant(
+        participant
+      )
+    ) {
+
+      console.log(
+        "🛡️ REMOVE SKIPPED - ADMIN:",
+        getMemberNumber(
+          participant
+        )
+      );
+
+      return false;
+
+    }
 
     const memberJid =
       normalizeJid(
@@ -1176,10 +1678,6 @@ async function removeMember(
       getPrivateJid(
         participant
       );
-
-    /*
-    Prefer actual group participant ID.
-    */
 
     const target =
       memberJid ||
@@ -1196,35 +1694,18 @@ async function removeMember(
     }
 
     /*
-    Never remove bot itself.
+    Never remove owner.
     */
 
     if (
       ownerJid &&
-      normalizeJid(target) ===
-      normalizeJid(ownerJid)
-    ) {
-
-      return false;
-
-    }
-
-    /*
-    Never remove group creator/admin
-    if role is known.
-    */
-
-    if (
-      participant?.admin ===
-      "admin" ||
-      participant?.admin ===
-      "superadmin"
-    ) {
-
-      console.log(
-        "⚠️ REMOVE SKIPPED - ADMIN:",
+      normalizeJid(
         target
-      );
+      ) ===
+      normalizeJid(
+        ownerJid
+      )
+    ) {
 
       return false;
 
@@ -1241,25 +1722,27 @@ async function removeMember(
       getMemberNumber(
         participant
       ),
-      "FROM:",
+      "| GROUP:",
       groupName
     );
 
     /*
-    Send removal notice privately
+    Private removal message.
     */
 
-    const privateJid =
+    const privateChat =
       getPrivateJid(
         participant
       );
 
-    if (privateJid) {
+    if (
+      privateChat
+    ) {
 
       try {
 
         await sock.sendMessage(
-          privateJid,
+          privateChat,
           {
             text:
 `🚫 *GROUP REMOVAL NOTICE*
@@ -1273,7 +1756,14 @@ Agar aapko lagta hai ke ye action ghalat hua hai to group admin se rabta karein.
           }
         );
 
-      } catch {}
+      } catch (error) {
+
+        console.log(
+          "⚠️ Removal notice could not be sent:",
+          error.message
+        );
+
+      }
 
     }
 
@@ -1293,9 +1783,19 @@ Agar aapko lagta hai ke ye action ghalat hua hai to group admin se rabta karein.
 }
 
 /*
-========================================
+========================================================
 REPORT
-========================================
+========================================================
+
+VERY IMPORTANT:
+
+Report group mein jayegi.
+
+Warning private chat mein jayegi.
+
+Removal attempt group se hoga.
+
+========================================================
 */
 
 async function sendReport(
@@ -1303,6 +1803,14 @@ async function sendReport(
 ) {
 
   try {
+
+    if (
+      !sock
+    ) {
+
+      return;
+
+    }
 
     const meta =
       await sock.groupMetadata(
@@ -1313,16 +1821,36 @@ async function sendReport(
       messageLog[groupJid] ||
       {};
 
+    if (
+      !warnings[groupJid]
+    ) {
+
+      warnings[groupJid] = {};
+
+    }
+
     const active = [];
 
     const inactive = [];
 
-    let totalMessages = 0;
+    let totalMessages =
+      0;
+
+    /*
+    ========================================
+    PROCESS MEMBERS
+    ========================================
+    */
 
     for (
       const participant
-      of meta.participants || []
+      of meta.participants ||
+      []
     ) {
+
+      /*
+      Save LID mapping.
+      */
 
       if (
         participant.id &&
@@ -1362,7 +1890,9 @@ async function sendReport(
           participant
         );
 
-      if (count > 0) {
+      if (
+        count > 0
+      ) {
 
         active.push({
           number,
@@ -1383,10 +1913,21 @@ async function sendReport(
 
     }
 
+    /*
+    Highest messages first.
+    */
+
     active.sort(
       (a, b) =>
-        b.count - a.count
+        b.count -
+        a.count
     );
+
+    /*
+    ========================================
+    GROUP REPORT TEXT
+    ========================================
+    */
 
     let text =
       "╭━━━━━━━━━━━━━━━━━━━━╮\n";
@@ -1412,6 +1953,12 @@ async function sendReport(
     text +=
       `💬 *TOTAL MESSAGES:* ${totalMessages}\n\n`;
 
+    /*
+    ========================================
+    ACTIVE
+    ========================================
+    */
+
     text +=
       "┏━━━━━━━━━━━━━━━━━━━━┓\n";
 
@@ -1421,7 +1968,9 @@ async function sendReport(
     text +=
       "┗━━━━━━━━━━━━━━━━━━━━┛\n\n";
 
-    if (!active.length) {
+    if (
+      !active.length
+    ) {
 
       text +=
         "😅 Kisi ne message nahi kiya.\n\n";
@@ -1447,6 +1996,12 @@ async function sendReport(
 
     }
 
+    /*
+    ========================================
+    ZERO
+    ========================================
+    */
+
     text +=
       "┏━━━━━━━━━━━━━━━━━━━━┓\n";
 
@@ -1456,7 +2011,9 @@ async function sendReport(
     text +=
       "┗━━━━━━━━━━━━━━━━━━━━┛\n\n";
 
-    if (!inactive.length) {
+    if (
+      !inactive.length
+    ) {
 
       text +=
         "🎉 Sab members active hain!\n";
@@ -1496,7 +2053,7 @@ async function sendReport(
 
     /*
     ========================================
-    GROUP REPORT ONLY
+    SEND GROUP REPORT
     ========================================
     */
 
@@ -1509,51 +2066,15 @@ async function sendReport(
 
     /*
     ========================================
-    PRIVATE WARNINGS / REMOVALS
+    CLEAR WARNINGS FOR ACTIVE USERS
     ========================================
-    */
-
-    if (!warnings[groupJid]) {
-      warnings[groupJid] = {};
-    }
-
-    /*
-    Active members:
-    remove their previous warning because
-    they became active.
     */
 
     for (
       const participant
-      of meta.participants || []
+      of meta.participants ||
+      []
     ) {
-
-      const ids = [
-        participant?.id,
-        participant?.lid,
-        participant?.phoneNumber
-      ];
-
-      let warningKey = null;
-
-      for (
-        const id of ids
-      ) {
-
-        const n =
-          normalizeJid(id);
-
-        if (
-          n &&
-          warnings[groupJid][n]
-        ) {
-
-          warningKey = n;
-          break;
-
-        }
-
-      }
 
       const times =
         getMessagesForMember(
@@ -1564,19 +2085,22 @@ async function sendReport(
       const count =
         times.length;
 
-      if (count > 0) {
+      if (
+        count > 0
+      ) {
 
-        /*
-        User became active.
-        Clear old warning.
-        */
+        const cleared =
+          clearMemberWarning(
+            groupJid,
+            participant
+          );
 
-        if (warningKey) {
-
-          delete warnings[groupJid][warningKey];
+        if (
+          cleared
+        ) {
 
           console.log(
-            "✅ WARNING CLEARED - MEMBER ACTIVE:",
+            "✅ WARNING CLEARED:",
             getMemberNumber(
               participant
             )
@@ -1592,11 +2116,26 @@ async function sendReport(
     ========================================
     PROCESS ZERO MEMBERS
     ========================================
+
+    First zero period:
+      PRIVATE WARNING
+
+    Second consecutive zero period:
+      REMOVE
+
+    Admin:
+      SKIP
+
+    Owner:
+      SKIP
+
+    ========================================
     */
 
     for (
       const participant
-      of meta.participants || []
+      of meta.participants ||
+      []
     ) {
 
       const times =
@@ -1608,27 +2147,25 @@ async function sendReport(
       const count =
         times.length;
 
-      if (count !== 0) {
+      /*
+      Active = nothing to do.
+      */
+
+      if (
+        count > 0
+      ) {
+
         continue;
+
       }
 
       /*
-      Skip bot/owner.
+      Owner protection.
       */
 
-      const privateJid =
-        getPrivateJid(
-          participant
-        );
-
       if (
-        ownerJid &&
-        privateJid &&
-        normalizeJid(
-          privateJid
-        ) ===
-        normalizeJid(
-          ownerJid
+        isOwnerParticipant(
+          participant
         )
       ) {
 
@@ -1637,40 +2174,42 @@ async function sendReport(
       }
 
       /*
-      Find existing warning.
+      Admin protection.
       */
 
-      let existingWarning =
-        null;
-
-      const possibleKeys = [
-        participant?.id,
-        participant?.lid,
-        participant?.phoneNumber,
-        privateJid
-      ];
-
-      for (
-        const id
-        of possibleKeys
+      if (
+        isAdminParticipant(
+          participant
+        )
       ) {
 
-        const n =
-          normalizeJid(id);
+        console.log(
+          "🛡️ ADMIN ZERO - NO WARNING/REMOVAL:",
+          getMemberNumber(
+            participant
+          )
+        );
 
-        if (
-          n &&
-          warnings[groupJid][n]
-        ) {
-
-          existingWarning =
-            warnings[groupJid][n];
-
-          break;
-
-        }
+        continue;
 
       }
+
+      /*
+      Find previous warning.
+      */
+
+      const warningKey =
+        findWarningKey(
+          groupJid,
+          participant
+        );
+
+      const existingWarning =
+        warningKey
+          ? warnings[groupJid][
+              warningKey
+            ]
+          : null;
 
       /*
       ======================================
@@ -1678,7 +2217,9 @@ async function sendReport(
       ======================================
       */
 
-      if (!existingWarning) {
+      if (
+        !existingWarning
+      ) {
 
         const sent =
           await sendPrivateWarning(
@@ -1687,7 +2228,14 @@ async function sendReport(
             participant
           );
 
-        if (sent) {
+        if (
+          sent
+        ) {
+
+          const privateJid =
+            getPrivateJid(
+              participant
+            );
 
           const key =
             normalizeJid(
@@ -1696,14 +2244,28 @@ async function sendReport(
               participant?.lid
             );
 
-          if (key) {
+          if (
+            key
+          ) {
 
-            warnings[groupJid][key] = {
+            warnings[groupJid][
+              key
+            ] = {
               warnedAt:
                 Date.now()
             };
 
           }
+
+          /*
+          Save immediately so warning
+          survives restart.
+          */
+
+          await saveCloud(
+            "warnings",
+            warnings
+          );
 
         }
 
@@ -1711,11 +2273,8 @@ async function sendReport(
 
       /*
       ======================================
-      SECOND CONSECUTIVE ZERO PERIOD
+      SECOND ZERO PERIOD
       ======================================
-
-      User was already warned last cycle
-      and again has 0 messages.
       */
 
       else {
@@ -1727,45 +2286,79 @@ async function sendReport(
           )
         );
 
-        await removeMember(
-          groupJid,
-          meta.subject,
-          participant
-        );
+        const removed =
+          await removeMember(
+            groupJid,
+            meta.subject,
+            participant
+          );
 
         /*
-        Remove warning record.
+        Delete warning after removal
+        attempt so next cycle does not
+        repeatedly try based on old warning.
         */
 
-        const possibleKeys2 = [
+        if (
+          warningKey
+        ) {
+
+          delete warnings[groupJid][
+            warningKey
+          ];
+
+        }
+
+        /*
+        Also clear every possible
+        duplicate warning key.
+        */
+
+        const possibleKeys = [
           participant?.id,
           participant?.lid,
           participant?.phoneNumber,
-          privateJid
+          getPrivateJid(
+            participant
+          )
         ];
 
         for (
           const id
-          of possibleKeys2
+          of possibleKeys
         ) {
 
-          const n =
-            normalizeJid(id);
+          const key =
+            normalizeJid(
+              id
+            );
 
           if (
-            n &&
-            warnings[groupJid][n]
+            key &&
+            warnings[groupJid][key]
           ) {
 
-            delete warnings[groupJid][n];
+            delete warnings[groupJid][
+              key
+            ];
 
           }
 
         }
 
+        console.log(
+          removed
+            ? "✅ REMOVE ATTEMPT COMPLETE"
+            : "⚠️ REMOVE ATTEMPT FAILED/SKIPPED"
+        );
+
       }
 
     }
+
+    /*
+    Save identity/warnings.
+    */
 
     await saveCloud(
       "lidMap",
@@ -1789,20 +2382,27 @@ async function sendReport(
       error.message
     );
 
+    lastError =
+      error.message;
+
   }
 
 }
 
 /*
-========================================
+========================================================
 GROUP SCAN
-========================================
+========================================================
 */
 
 async function findTargetGroups() {
 
-  if (!sock) {
+  if (
+    !sock
+  ) {
+
     return;
+
   }
 
   try {
@@ -1818,7 +2418,9 @@ async function findTargetGroups() {
 
     for (
       const jid
-      of Object.keys(groups)
+      of Object.keys(
+        groups
+      )
     ) {
 
       const group =
@@ -1830,7 +2432,8 @@ async function findTargetGroups() {
 
       const name =
         String(
-          group.subject || ""
+          group.subject ||
+          ""
         ).trim();
 
       if (!name) {
@@ -1890,8 +2493,15 @@ async function findTargetGroups() {
 
     }
 
+    /*
+    Keep only configured targets.
+    */
+
     savedGroups =
-      detected.slice(0, 2);
+      detected.slice(
+        0,
+        TARGET_GROUP_NAMES.length
+      );
 
     saveJSON(
       GROUP_FILE,
@@ -1918,6 +2528,17 @@ async function findTargetGroups() {
       savedGroups.length
     );
 
+    for (
+      const group
+      of savedGroups
+    ) {
+
+      console.log(
+        `🎯 ${group.name} -> ${group.jid}`
+      );
+
+    }
+
   } catch (error) {
 
     console.log(
@@ -1933,9 +2554,9 @@ async function findTargetGroups() {
 }
 
 /*
-========================================
-GROUP LIST
-========================================
+========================================================
+GROUP LIST COMMAND
+========================================================
 */
 
 async function sendGroupsList(
@@ -1951,7 +2572,9 @@ async function sendGroupsList(
   text +=
     "╰━━━━━━━━━━━━━━━━━━━━╯\n\n";
 
-  if (!allGroups.length) {
+  if (
+    !allGroups.length
+  ) {
 
     text +=
       "❌ Groups abhi detect nahi hue.";
@@ -1959,13 +2582,20 @@ async function sendGroupsList(
   } else {
 
     allGroups.forEach(
-      (group, index) => {
+      (
+        group,
+        index
+      ) => {
 
         const target =
           savedGroups.some(
             g =>
-              g.jid ===
-              group.jid
+              normalizeJid(
+                g.jid
+              ) ===
+              normalizeJid(
+                group.jid
+              )
           );
 
         text +=
@@ -1990,18 +2620,65 @@ async function sendGroupsList(
 }
 
 /*
-========================================
+========================================================
+DURATION
+========================================================
+*/
+
+function formatDuration(
+  ms
+) {
+
+  const totalSeconds =
+    Math.floor(
+      ms / 1000
+    );
+
+  const days =
+    Math.floor(
+      totalSeconds /
+      86400
+    );
+
+  const hours =
+    Math.floor(
+      (
+        totalSeconds %
+        86400
+      ) / 3600
+    );
+
+  const minutes =
+    Math.floor(
+      (
+        totalSeconds %
+        3600
+      ) / 60
+    );
+
+  return `${days}d ${hours}h ${minutes}m`;
+
+}
+
+/*
+========================================================
 DASHBOARD
-========================================
+========================================================
 */
 
 app.get(
   "/",
-  async (req, res) => {
+  async (
+    req,
+    res
+  ) => {
 
-    let qrImage = "";
+    let qrImage =
+      "";
 
-    if (latestQR) {
+    if (
+      latestQR
+    ) {
 
       try {
 
@@ -2063,7 +2740,8 @@ app.get(
         daysPassed
       );
 
-    let totalMessages = 0;
+    let totalMessages =
+      0;
 
     for (
       const group
@@ -2098,7 +2776,9 @@ app.get(
     let statusClass =
       "yellow";
 
-    if (connected) {
+    if (
+      connected
+    ) {
 
       statusText =
         "CONNECTED";
@@ -2132,8 +2812,12 @@ app.get(
 
     const groupsHTML =
       savedGroups.length
-        ? savedGroups.map(
-            (group, index) => `
+        ? savedGroups
+            .map(
+              (
+                group,
+                index
+              ) => `
 <div class="group-card">
 
   <div class="group-icon">
@@ -2143,11 +2827,15 @@ app.get(
   <div class="group-info">
 
     <div class="group-name">
-      ${escapeHTML(group.name)}
+      ${escapeHTML(
+        group.name
+      )}
     </div>
 
     <div class="group-jid">
-      ${escapeHTML(group.jid)}
+      ${escapeHTML(
+        group.jid
+      )}
     </div>
 
     <div class="group-count">
@@ -2164,7 +2852,8 @@ app.get(
 
 </div>
 `
-          ).join("")
+            )
+            .join("")
         : `
 <div class="empty-box">
   👥
@@ -2175,27 +2864,38 @@ app.get(
 
     const allGroupsHTML =
       allGroups.length
-        ? allGroups.map(
-            group => {
+        ? allGroups
+            .map(
+              group => {
 
-              const target =
-                savedGroups.some(
-                  g =>
-                    g.jid ===
-                    group.jid
-                );
+                const target =
+                  savedGroups.some(
+                    g =>
+                      normalizeJid(
+                        g.jid
+                      ) ===
+                      normalizeJid(
+                        group.jid
+                      )
+                  );
 
-              return `
+                return `
 <div class="all-group">
 
   <div>
+
     <div class="all-group-name">
-      ${escapeHTML(group.name)}
+      ${escapeHTML(
+        group.name
+      )}
     </div>
 
     <div class="all-group-jid">
-      ${escapeHTML(group.jid)}
+      ${escapeHTML(
+        group.jid
+      )}
     </div>
+
   </div>
 
   ${
@@ -2207,8 +2907,9 @@ app.get(
 </div>
 `;
 
-            }
-          ).join("")
+              }
+            )
+            .join("")
         : `
 <div class="empty-box">
   No groups loaded yet.
@@ -2288,7 +2989,7 @@ app.get(
 >
 
 <title>
-WhatsApp Bot • BAMB Dashboard
+WhatsApp Report Bot • BAMB Dashboard
 </title>
 
 <style>
@@ -3141,7 +3842,11 @@ h1 {
 
   <div class="stat">
     <div class="stat-icon">📱</div>
-    <div class="stat-title">WHATSAPP</div>
+
+    <div class="stat-title">
+      WHATSAPP
+    </div>
+
     <div class="stat-value">
       ${
         connected
@@ -3153,15 +3858,23 @@ h1 {
 
   <div class="stat">
     <div class="stat-icon">🎯</div>
-    <div class="stat-title">TARGET GROUPS</div>
+
+    <div class="stat-title">
+      TARGET GROUPS
+    </div>
+
     <div class="stat-value">
-      ${savedGroups.length}/2
+      ${savedGroups.length}/${TARGET_GROUP_NAMES.length}
     </div>
   </div>
 
   <div class="stat">
     <div class="stat-icon">💬</div>
-    <div class="stat-title">MESSAGES</div>
+
+    <div class="stat-title">
+      MESSAGES
+    </div>
+
     <div class="stat-value">
       ${totalMessages}
     </div>
@@ -3169,7 +3882,11 @@ h1 {
 
   <div class="stat">
     <div class="stat-icon">☁️</div>
-    <div class="stat-title">STORAGE</div>
+
+    <div class="stat-title">
+      STORAGE
+    </div>
+
     <div class="stat-value">
       ${
         supabase
@@ -3202,25 +3919,31 @@ h1 {
   <div class="device">
 
     <div class="device-row">
+
       <span class="device-label">
         Status
       </span>
 
       <span class="device-value online">
+
         ${
           connected
             ? "● Connected"
             : statusText
         }
+
       </span>
+
     </div>
 
     <div class="device-row">
+
       <span class="device-label">
         Number
       </span>
 
       <span class="device-value">
+
         ${
           ownerJid
             ? escapeHTML(
@@ -3230,34 +3953,63 @@ h1 {
               )
             : "Not linked"
         }
+
       </span>
+
     </div>
 
     <div class="device-row">
+
+      <span class="device-label">
+        Uptime
+      </span>
+
+      <span class="device-value">
+        ${uptime}
+      </span>
+
+    </div>
+
+    <div class="device-row">
+
       <span class="device-label">
         Cloud Storage
       </span>
 
       <span class="device-value">
+
         ${
           supabase
             ? "🟢 Active"
             : "🟡 Waiting"
         }
+
       </span>
+
     </div>
 
   </div>
 
   <div class="notice">
+
     ☁️ Message counting data Supabase mein
     save hoga, isliye Render restart/sleep ke
     baad cycle zero se start nahi hogi.
+
     <br><br>
-    ⚠️ 0 messages walay members ko private
-    warning milegi. Do consecutive 7-day
-    periods mein 0 rehne par removal attempt
-    hoga.
+
+    ⚠️ 0 messages walay normal members ko
+    warning PRIVATE chat mein milegi.
+
+    <br><br>
+
+    🚫 Agar warning ke baad aglay 7 din mein
+    bhi 0 messages rahe to removal attempt hoga.
+
+    <br><br>
+
+    🛡️ Bot/owner aur group admins protected hain.
+
   </div>
 
 </div>
@@ -3271,7 +4023,7 @@ h1 {
     </h2>
 
     <span>
-      ${savedGroups.length}/2
+      ${savedGroups.length}/${TARGET_GROUP_NAMES.length}
     </span>
 
   </div>
@@ -3385,59 +4137,66 @@ h1 {
 );
 
 /*
-========================================
-DURATION
-========================================
-*/
-
-function formatDuration(
-  ms
-) {
-
-  const totalSeconds =
-    Math.floor(
-      ms / 1000
-    );
-
-  const days =
-    Math.floor(
-      totalSeconds /
-      86400
-    );
-
-  const hours =
-    Math.floor(
-      (
-        totalSeconds %
-        86400
-      ) / 3600
-    );
-
-  const minutes =
-    Math.floor(
-      (
-        totalSeconds %
-        3600
-      ) / 60
-    );
-
-  return `${days}d ${hours}h ${minutes}m`;
-
-}
-
-/*
-========================================
-HEALTH
-========================================
+========================================================
+HEALTH CHECK
+========================================================
 */
 
 app.get(
   "/health",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
+
+    const messages =
+      Object.values(
+        messageLog
+      ).reduce(
+        (
+          total,
+          group
+        ) =>
+          total +
+          Object.values(
+            group || {}
+          ).reduce(
+            (
+              sum,
+              arr
+            ) =>
+              sum +
+              (
+                Array.isArray(
+                  arr
+                )
+                  ? arr.length
+                  : 0
+              ),
+            0
+          ),
+        0
+      );
+
+    const warningCount =
+      Object.values(
+        warnings
+      ).reduce(
+        (
+          total,
+          group
+        ) =>
+          total +
+          Object.keys(
+            group || {}
+          ).length,
+        0
+      );
 
     res.json({
 
-      status: "ok",
+      status:
+        "ok",
 
       whatsapp:
         ownerJid
@@ -3445,7 +4204,8 @@ app.get(
           : connectionStatus,
 
       owner:
-        ownerJid || null,
+        ownerJid ||
+        null,
 
       targetGroups:
         savedGroups,
@@ -3456,34 +4216,7 @@ app.get(
       cloud:
         !!supabase,
 
-      messages:
-        Object.values(
-          messageLog
-        ).reduce(
-          (
-            total,
-            group
-          ) =>
-            total +
-            Object.values(
-              group || {}
-            ).reduce(
-              (
-                sum,
-                arr
-              ) =>
-                sum +
-                (
-                  Array.isArray(
-                    arr
-                  )
-                    ? arr.length
-                    : 0
-                ),
-              0
-            ),
-          0
-        ),
+      messages,
 
       lidMappings:
         Object.keys(
@@ -3491,22 +4224,14 @@ app.get(
         ).length,
 
       warnings:
-        Object.values(
-          warnings
-        ).reduce(
-          (
-            total,
-            group
-          ) =>
-            total +
-            Object.keys(
-              group || {}
-            ).length,
-          0
-        ),
+        warningCount,
+
+      cycleStart:
+        botState.cycleStart,
 
       lastError:
-        lastError || null
+        lastError ||
+        null
 
     });
 
@@ -3514,15 +4239,19 @@ app.get(
 );
 
 /*
-========================================
+========================================================
 START BOT
-========================================
+========================================================
 */
 
 async function startBot() {
 
-  if (reconnecting) {
+  if (
+    reconnecting
+  ) {
+
     return;
+
   }
 
   reconnecting =
@@ -3597,7 +4326,7 @@ async function startBot() {
 
     /*
     ========================================
-    CONNECTION
+    CONNECTION UPDATE
     ========================================
     */
 
@@ -3610,6 +4339,10 @@ async function startBot() {
           qr,
           lastDisconnect
         } = update;
+
+        /*
+        QR
+        */
 
         if (qr) {
 
@@ -3627,6 +4360,10 @@ async function startBot() {
           );
 
         }
+
+        /*
+        CONNECTED
+        */
 
         if (
           connection ===
@@ -3674,11 +4411,19 @@ async function startBot() {
           );
 
           console.log(
-            "⚠️ PRIVATE WARNINGS: ON"
+            "📊 MESSAGE COUNTING: ON"
+          );
+
+          console.log(
+            "⚠️ PRIVATE WARNING: ON"
           );
 
           console.log(
             "🚫 AUTO REMOVAL: ON"
+          );
+
+          console.log(
+            "🛡️ ADMIN PROTECTION: ON"
           );
 
           console.log(
@@ -3688,6 +4433,10 @@ async function startBot() {
           await findTargetGroups();
 
         }
+
+        /*
+        DISCONNECTED
+        */
 
         if (
           connection ===
@@ -3727,6 +4476,11 @@ async function startBot() {
           reconnecting =
             false;
 
+          /*
+          Logged out:
+          do not endlessly reconnect.
+          */
+
           if (
             statusCode ===
             DisconnectReason.loggedOut
@@ -3739,6 +4493,10 @@ async function startBot() {
             return;
 
           }
+
+          /*
+          Reconnect.
+          */
 
           setTimeout(
             startBot,
@@ -3787,11 +4545,18 @@ async function startBot() {
               !msg ||
               !msg.message
             ) {
+
               continue;
+
             }
 
             const chat =
-              msg.key.remoteJid;
+              msg.key
+                .remoteJid;
+
+            /*
+            Only group messages.
+            */
 
             if (
               !chat ||
@@ -3803,6 +4568,12 @@ async function startBot() {
               continue;
 
             }
+
+            /*
+            =================================
+            IDENTITIES
+            =================================
+            */
 
             const senderLid =
               msg.key.participant ||
@@ -3846,13 +4617,15 @@ async function startBot() {
               "";
 
             const command =
-              String(text)
+              String(
+                text
+              )
                 .trim()
                 .toLowerCase();
 
             /*
             =================================
-            OWNER
+            OWNER CHECK
             =================================
             */
 
@@ -3871,7 +4644,8 @@ async function startBot() {
                 : null;
 
             const isOwner =
-              msg.key.fromMe === true ||
+              msg.key.fromMe ===
+                true ||
               (
                 ownerNormalized &&
                 phoneNormalized &&
@@ -3946,7 +4720,11 @@ async function startBot() {
               "!groups"
             ) {
 
-              if (isOwner) {
+              if (
+                isOwner
+              ) {
+
+                await findTargetGroups();
 
                 await sendGroupsList(
                   chat
@@ -3960,7 +4738,7 @@ async function startBot() {
 
             /*
             =================================
-            IGNORE OWN NORMAL MESSAGE
+            IGNORE BOT'S OWN NORMAL MESSAGE
             =================================
             */
 
@@ -3974,7 +4752,7 @@ async function startBot() {
 
             /*
             =================================
-            TARGET ONLY
+            TARGET GROUP ONLY
             =================================
             */
 
@@ -3988,16 +4766,34 @@ async function startBot() {
 
             }
 
-            const sender =
+            /*
+            =================================
+            GET SENDER
+            =================================
+            */
+
+            let sender =
+              null;
+
+            if (
               isPhoneJid(
                 senderPhone
               )
-                ? normalizeJid(
-                    senderPhone
-                  )
-                : normalizeJid(
-                    senderLid
-                  );
+            ) {
+
+              sender =
+                normalizeJid(
+                  senderPhone
+                );
+
+            } else {
+
+              sender =
+                normalizeJid(
+                  senderLid
+                );
+
+            }
 
             if (!sender) {
               continue;
@@ -4042,9 +4838,7 @@ async function startBot() {
             /*
             =================================
             IMPORTANT:
-            If user was previously warned,
-            clear warning immediately when
-            they send a message.
+            WARNING CLEAR
             =================================
             */
 
@@ -4075,7 +4869,9 @@ async function startBot() {
                   warnings[chat][key]
                 ) {
 
-                  delete warnings[chat][key];
+                  delete warnings[chat][
+                    key
+                  ];
 
                   warningCleared =
                     true;
@@ -4085,7 +4881,7 @@ async function startBot() {
               }
 
               /*
-              Also check phone mapping.
+              Phone mapping.
               */
 
               const phone =
@@ -4093,16 +4889,22 @@ async function startBot() {
                   sender
                 );
 
-              if (phone) {
+              if (
+                phone
+              ) {
 
                 const phoneKey =
                   `${phone}@s.whatsapp.net`;
 
                 if (
-                  warnings[chat][phoneKey]
+                  warnings[chat][
+                    phoneKey
+                  ]
                 ) {
 
-                  delete warnings[chat][phoneKey];
+                  delete warnings[chat][
+                    phoneKey
+                  ];
 
                   warningCleared =
                     true;
@@ -4131,7 +4933,7 @@ async function startBot() {
               true;
 
             console.log(
-              `💬 MESSAGE SAVED: ${chat}`
+              `💬 MESSAGE SAVED: ${chat} | ${sender}`
             );
 
           }
@@ -4142,7 +4944,9 @@ async function startBot() {
           =================================
           */
 
-          if (changed) {
+          if (
+            changed
+          ) {
 
             await saveData();
 
@@ -4186,9 +4990,9 @@ async function startBot() {
 }
 
 /*
-========================================
-QR REFRESH
-========================================
+========================================================
+QR EXPIRATION
+========================================================
 */
 
 setInterval(
@@ -4218,9 +5022,9 @@ setInterval(
 );
 
 /*
-========================================
+========================================================
 GROUP RESCAN
-========================================
+========================================================
 */
 
 setInterval(
@@ -4242,9 +5046,9 @@ setInterval(
 );
 
 /*
-========================================
-7 DAY REPORT
-========================================
+========================================================
+7-DAY AUTOMATIC REPORT
+========================================================
 */
 
 setInterval(
@@ -4263,56 +5067,91 @@ setInterval(
           1000;
 
       if (
-        Date.now() >=
+        Date.now() <
         end
       ) {
 
-        if (
-          sock &&
-          ownerJid
-        ) {
-
-          console.log(
-            "⏰ 7 DAYS COMPLETE"
-          );
-
-          /*
-          Send report to every target group.
-          This also sends private warnings and
-          handles second-cycle removals.
-          */
-
-          for (
-            const group
-            of savedGroups
-          ) {
-
-            await sendReport(
-              group.jid
-            );
-
-          }
-
-          /*
-          ======================================
-          NEW 7-DAY CYCLE
-          ======================================
-          */
-
-          botState.cycleStart =
-            Date.now();
-
-          messageLog = {};
-
-          await saveData();
-
-          console.log(
-            "🔄 NEW 7-DAY CYCLE"
-          );
-
-        }
+        return;
 
       }
+
+      if (
+        !sock ||
+        !ownerJid ||
+        connectionStatus !==
+          "connected"
+      ) {
+
+        console.log(
+          "⏰ 7 DAYS COMPLETE BUT WHATSAPP NOT CONNECTED."
+        );
+
+        return;
+
+      }
+
+      console.log(
+        "================================"
+      );
+
+      console.log(
+        "⏰ 7 DAYS COMPLETE"
+      );
+
+      console.log(
+        "📊 GENERATING REPORTS..."
+      );
+
+      /*
+      Report every target group.
+      */
+
+      for (
+        const group
+        of savedGroups
+      ) {
+
+        await sendReport(
+          group.jid
+        );
+
+      }
+
+      /*
+      ======================================
+      NEW CYCLE
+      ======================================
+      */
+
+      botState.cycleStart =
+        Date.now();
+
+      /*
+      New cycle starts with
+      zero message counts.
+
+      WARNING DATA IS NOT RESET.
+
+      This is IMPORTANT because warning
+      needs to survive into the next
+      cycle for second-zero removal.
+      */
+
+      messageLog = {};
+
+      await saveData();
+
+      console.log(
+        "🔄 NEW 7-DAY CYCLE STARTED"
+      );
+
+      console.log(
+        "⚠️ WARNING DATA PRESERVED"
+      );
+
+      console.log(
+        "================================"
+      );
 
     } catch (error) {
 
@@ -4328,9 +5167,9 @@ setInterval(
 );
 
 /*
-========================================
+========================================================
 SERVER
-========================================
+========================================================
 */
 
 app.listen(
@@ -4368,6 +5207,10 @@ app.listen(
     );
 
     console.log(
+      "📋 !GROUPS: ON"
+    );
+
+    console.log(
       "⏰ 7-DAY REPORT: ON"
     );
 
@@ -4377,6 +5220,10 @@ app.listen(
 
     console.log(
       "🚫 AUTO REMOVAL: ON"
+    );
+
+    console.log(
+      "🛡️ ADMIN PROTECTION: ON"
     );
 
     console.log(
@@ -4392,9 +5239,9 @@ app.listen(
 );
 
 /*
-========================================
+========================================================
 BOOT
-========================================
+========================================================
 */
 
 (async () => {
@@ -4404,6 +5251,22 @@ BOOT
   );
 
   await loadCloudData();
+
+  /*
+  If cloud/local data has no cycle,
+  start one now.
+  */
+
+  if (
+    !botState.cycleStart
+  ) {
+
+    botState.cycleStart =
+      Date.now();
+
+    await saveData();
+
+  }
 
   startBot();
 

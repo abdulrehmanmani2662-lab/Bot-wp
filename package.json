@@ -1,14 +1,19 @@
 {
   "name": "whatsapp-report-bot",
   "version": "1.0.0",
+  "description": "WhatsApp 7-day reporting bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.0",
     "@whiskeysockets/baileys": "latest",
-    "express": "latest",
-    "pino": "latest",
-    "qrcode": "latest"
+    "express": "^5.1.0",
+    "pino": "^9.7.0",
+    "qrcode": "^1.5.4"
   }
 }

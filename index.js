@@ -14,41 +14,12 @@ const path = require("path");
 const { createClient } = require("@supabase/supabase-js");
 
 /*
-========================================================
-WHATSAPP REPORT BOT
-========================================================
-
-FEATURES:
-
-1. 7-day activity cycle
-2. Target group auto detection
-3. Group report
-4. Private warning for 0-message members
-5. Second consecutive 0-message period = removal attempt
-6. Warning clears immediately when member becomes active
-7. Admins are protected from removal
-8. Bot/owner protected
-9. LID <-> phone mapping
-10. Supabase persistence
-11. Local JSON persistence
-12. QR dashboard
-13. !rana
-14. !stats
-15. !groups
-16. Automatic group rescanning
-17. Automatic reconnection
-
-========================================================
-*/
-
-/*
-========================================================
+==================================================
 CONFIG
-========================================================
+==================================================
 */
 
-const PORT =
-  process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
 const REPORT_DAYS = 7;
 
@@ -58,9 +29,9 @@ const TARGET_GROUP_NAMES = [
 ];
 
 /*
-========================================================
+==================================================
 SUPABASE
-========================================================
+==================================================
 */
 
 const SUPABASE_URL =
@@ -79,71 +50,42 @@ const supabase =
     : null;
 
 /*
-========================================================
-LOCAL DIRECTORIES
-========================================================
+==================================================
+DIRECTORIES
+==================================================
 */
 
-const BASE =
-  __dirname;
+const BASE = __dirname;
 
 const AUTH_DIR =
-  path.join(
-    BASE,
-    "auth"
-  );
+  path.join(BASE, "auth");
 
 const DATA_DIR =
-  path.join(
-    BASE,
-    "data"
-  );
+  path.join(BASE, "data");
 
-if (
-  !fs.existsSync(
-    AUTH_DIR
-  )
-) {
-  fs.mkdirSync(
-    AUTH_DIR,
-    {
-      recursive: true
-    }
-  );
+if (!fs.existsSync(AUTH_DIR)) {
+  fs.mkdirSync(AUTH_DIR, {
+    recursive: true
+  });
 }
 
-if (
-  !fs.existsSync(
-    DATA_DIR
-  )
-) {
-  fs.mkdirSync(
-    DATA_DIR,
-    {
-      recursive: true
-    }
-  );
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, {
+    recursive: true
+  });
 }
 
 /*
-========================================================
+==================================================
 JSON HELPERS
-========================================================
+==================================================
 */
 
-function loadJSON(
-  file,
-  fallback
-) {
+function loadJSON(file, fallback) {
   try {
-    if (
-      fs.existsSync(file)
-    ) {
+    if (fs.existsSync(file)) {
       return JSON.parse(
-        fs.readFileSync(
-          file,
-          "utf8"
-        )
+        fs.readFileSync(file, "utf8")
       );
     }
   } catch (error) {
@@ -156,18 +98,11 @@ function loadJSON(
   return fallback;
 }
 
-function saveJSON(
-  file,
-  data
-) {
+function saveJSON(file, data) {
   try {
     fs.writeFileSync(
       file,
-      JSON.stringify(
-        data,
-        null,
-        2
-      )
+      JSON.stringify(data, null, 2)
     );
   } catch (error) {
     console.log(
@@ -178,53 +113,37 @@ function saveJSON(
 }
 
 /*
-========================================================
-DATA FILES
-========================================================
+==================================================
+FILES
+==================================================
 */
 
 const STATE_FILE =
-  path.join(
-    DATA_DIR,
-    "botState.json"
-  );
+  path.join(DATA_DIR, "botState.json");
 
 const GROUP_FILE =
-  path.join(
-    DATA_DIR,
-    "groups.json"
-  );
+  path.join(DATA_DIR, "groups.json");
 
 const ALL_GROUP_FILE =
-  path.join(
-    DATA_DIR,
-    "allGroups.json"
-  );
+  path.join(DATA_DIR, "allGroups.json");
 
 const LID_MAP_FILE =
-  path.join(
-    DATA_DIR,
-    "lidMap.json"
-  );
+  path.join(DATA_DIR, "lidMap.json");
 
 const WARNING_FILE =
-  path.join(
-    DATA_DIR,
-    "warnings.json"
-  );
+  path.join(DATA_DIR, "warnings.json");
 
 /*
-========================================================
-LOAD LOCAL DATA
-========================================================
+==================================================
+LOCAL DATA
+==================================================
 */
 
 let botState =
   loadJSON(
     STATE_FILE,
     {
-      cycleStart:
-        Date.now()
+      cycleStart: Date.now()
     }
   );
 
@@ -252,201 +171,108 @@ let warnings =
     {}
   );
 
-/*
-========================================================
-MESSAGE LOG
-
-messageLog[groupJid][memberJid] = [
-  timestamp,
-  timestamp,
-  timestamp
-]
-
-========================================================
-*/
-
 let messageLog = {};
 
 /*
-========================================================
+==================================================
 SUPABASE LOAD
-========================================================
+==================================================
 */
 
 async function loadCloudData() {
-
   if (!supabase) {
-
     console.log(
       "⚠️ Supabase variables not configured."
     );
-
     return;
   }
 
   try {
-
-    const {
-      data,
-      error
-    } =
+    const { data, error } =
       await supabase
-        .from(
-          "bot_storage"
-        )
-        .select(
-          "key,value"
-        );
+        .from("bot_storage")
+        .select("key,value");
 
     if (error) {
       throw error;
     }
 
-    for (
-      const row
-      of data || []
-    ) {
-
-      if (
-        row.key ===
-        "messageLog"
-      ) {
-        messageLog =
-          row.value || {};
+    for (const row of data || []) {
+      if (row.key === "messageLog") {
+        messageLog = row.value || {};
       }
 
-      if (
-        row.key ===
-        "botState"
-      ) {
-        botState =
-          row.value ||
-          botState;
+      if (row.key === "botState") {
+        botState = row.value || botState;
       }
 
-      if (
-        row.key ===
-        "savedGroups"
-      ) {
-        savedGroups =
-          row.value || [];
+      if (row.key === "savedGroups") {
+        savedGroups = row.value || [];
       }
 
-      if (
-        row.key ===
-        "allGroups"
-      ) {
-        allGroups =
-          row.value || [];
+      if (row.key === "allGroups") {
+        allGroups = row.value || [];
       }
 
-      if (
-        row.key ===
-        "lidMap"
-      ) {
-        lidMap =
-          row.value || {};
+      if (row.key === "lidMap") {
+        lidMap = row.value || {};
       }
 
-      if (
-        row.key ===
-        "warnings"
-      ) {
-        warnings =
-          row.value || {};
+      if (row.key === "warnings") {
+        warnings = row.value || {};
       }
-
-    }
-
-    /*
-    Make sure cycleStart exists.
-    */
-
-    if (
-      !botState.cycleStart
-    ) {
-
-      botState.cycleStart =
-        Date.now();
-
     }
 
     console.log(
       "☁️ Supabase data loaded"
     );
-
   } catch (error) {
-
     console.log(
       "❌ Supabase load error:",
       error.message
     );
-
   }
-
 }
 
 /*
-========================================================
+==================================================
 SUPABASE SAVE
-========================================================
+==================================================
 */
 
-async function saveCloud(
-  key,
-  value
-) {
-
+async function saveCloud(key, value) {
   if (!supabase) {
     return;
   }
 
   try {
-
-    const {
-      error
-    } =
+    const { error } =
       await supabase
-        .from(
-          "bot_storage"
-        )
+        .from("bot_storage")
         .upsert(
           {
             key,
             value,
             updated_at:
-              new Date()
-                .toISOString()
+              new Date().toISOString()
           },
           {
-            onConflict:
-              "key"
+            onConflict: "key"
           }
         );
 
     if (error) {
       throw error;
     }
-
   } catch (error) {
-
     console.log(
       `❌ Cloud save error (${key}):`,
       error.message
     );
-
   }
-
 }
 
-/*
-========================================================
-SAVE ALL DATA
-========================================================
-*/
-
 async function saveData() {
-
   saveJSON(
     STATE_FILE,
     botState
@@ -501,273 +327,141 @@ async function saveData() {
     "warnings",
     warnings
   );
-
 }
 
 /*
-========================================================
+==================================================
 JID HELPERS
-========================================================
+==================================================
 */
 
-function normalizeJid(
-  jid
-) {
-
-  return String(
-    jid || ""
-  )
+function normalizeJid(jid) {
+  return String(jid || "")
     .trim()
     .split(":")[0]
     .toLowerCase();
-
 }
 
-function isLid(
-  jid
-) {
-
-  return normalizeJid(
-    jid
-  ).endsWith(
-    "@lid"
-  );
-
+function isLid(jid) {
+  return normalizeJid(jid)
+    .endsWith("@lid");
 }
 
-function isPhoneJid(
-  jid
-) {
-
-  return normalizeJid(
-    jid
-  ).endsWith(
-    "@s.whatsapp.net"
-  );
-
+function isPhoneJid(jid) {
+  return normalizeJid(jid)
+    .endsWith("@s.whatsapp.net");
 }
 
-function phoneNumberFromJid(
-  jid
-) {
+function phoneNumberFromJid(jid) {
+  const n = normalizeJid(jid);
 
-  const n =
-    normalizeJid(
-      jid
-    );
-
-  if (
-    n.endsWith(
-      "@s.whatsapp.net"
-    )
-  ) {
-
+  if (n.endsWith("@s.whatsapp.net")) {
     return n.replace(
       "@s.whatsapp.net",
       ""
     );
-
   }
 
   return null;
-
 }
 
-function formatNumber(
-  jid
-) {
+function formatNumber(jid) {
+  const n = normalizeJid(jid);
 
-  const n =
-    normalizeJid(
-      jid
-    );
-
-  if (
-    n.endsWith(
-      "@s.whatsapp.net"
-    )
-  ) {
-
+  if (n.endsWith("@s.whatsapp.net")) {
     return n.replace(
       "@s.whatsapp.net",
       ""
     );
-
   }
 
-  if (
-    n.endsWith(
-      "@c.us"
-    )
-  ) {
-
+  if (n.endsWith("@c.us")) {
     return n.replace(
       "@c.us",
       ""
     );
-
   }
 
-  if (
-    n.endsWith(
-      "@lid"
-    )
-  ) {
-
+  if (n.endsWith("@lid")) {
     return n.replace(
       "@lid",
       ""
     );
-
   }
 
   return n.split("@")[0];
-
 }
 
 /*
-========================================================
-LID -> PHONE MEMORY
-========================================================
+==================================================
+LID ↔ PHONE
+==================================================
 */
 
-function rememberIdentity(
-  lid,
-  phone
-) {
-
-  const l =
-    normalizeJid(
-      lid
-    );
-
-  const p =
-    normalizeJid(
-      phone
-    );
+function rememberIdentity(lid, phone) {
+  const l = normalizeJid(lid);
+  const p = normalizeJid(phone);
 
   if (!l || !p) {
     return false;
   }
 
-  if (
-    !isLid(l)
-  ) {
+  if (!isLid(l)) {
     return false;
   }
 
-  if (
-    !isPhoneJid(p)
-  ) {
+  if (!isPhoneJid(p)) {
     return false;
   }
 
-  if (
-    lidMap[l] !== p
-  ) {
-
-    lidMap[l] =
-      p;
-
+  if (lidMap[l] !== p) {
+    lidMap[l] = p;
     return true;
-
   }
 
   return false;
-
 }
 
-/*
-========================================================
-GET PHONE FROM ANY ID
-========================================================
-*/
-
-function getPhoneFromAnyId(
-  id
-) {
-
-  const n =
-    normalizeJid(
-      id
-    );
+function getPhoneFromAnyId(id) {
+  const n = normalizeJid(id);
 
   if (!n) {
     return null;
   }
 
-  if (
-    isPhoneJid(n)
-  ) {
-
-    return phoneNumberFromJid(
-      n
-    );
-
+  if (isPhoneJid(n)) {
+    return phoneNumberFromJid(n);
   }
 
-  if (
-    isLid(n) &&
-    lidMap[n]
-  ) {
-
+  if (isLid(n) && lidMap[n]) {
     return phoneNumberFromJid(
       lidMap[n]
     );
-
   }
 
   return null;
-
 }
 
-/*
-========================================================
-MEMBER NUMBER
-========================================================
-*/
-
-function getMemberNumber(
-  participant
-) {
-
+function getMemberNumber(participant) {
   const candidates = [
     participant?.phoneNumber,
     participant?.id,
     participant?.lid
   ];
 
-  for (
-    const id
-    of candidates
-  ) {
-
-    if (
-      isPhoneJid(id)
-    ) {
-
+  for (const id of candidates) {
+    if (isPhoneJid(id)) {
       return `+${formatNumber(id)}`;
-
     }
-
   }
 
-  for (
-    const id
-    of candidates
-  ) {
-
+  for (const id of candidates) {
     const phone =
-      getPhoneFromAnyId(
-        id
-      );
+      getPhoneFromAnyId(id);
 
     if (phone) {
-
       return `+${phone}`;
-
     }
-
   }
 
   return formatNumber(
@@ -775,117 +469,57 @@ function getMemberNumber(
     participant?.lid ||
     ""
   );
-
 }
 
-/*
-========================================================
-PRIVATE CHAT JID
-========================================================
-*/
-
-function getPrivateJid(
-  participant
-) {
-
+function getPrivateJid(participant) {
   const candidates = [
     participant?.phoneNumber,
     participant?.id,
     participant?.lid
   ];
 
-  /*
-  Direct phone first.
-  */
+  for (const id of candidates) {
+    const n = normalizeJid(id);
 
-  for (
-    const id
-    of candidates
-  ) {
-
-    const n =
-      normalizeJid(
-        id
-      );
-
-    if (
-      isPhoneJid(n)
-    ) {
-
+    if (isPhoneJid(n)) {
       return n;
-
     }
-
   }
 
-  /*
-  LID mapping second.
-  */
-
-  for (
-    const id
-    of candidates
-  ) {
-
+  for (const id of candidates) {
     const phone =
-      getPhoneFromAnyId(
-        id
-      );
+      getPhoneFromAnyId(id);
 
     if (phone) {
-
-      return (
-        `${phone}@s.whatsapp.net`
-      );
-
+      return `${phone}@s.whatsapp.net`;
     }
-
   }
 
   return null;
-
 }
 
 /*
-========================================================
-GROUP NAME NORMALIZATION
-========================================================
+==================================================
+GROUP MATCHING
+==================================================
 */
 
-function normalizeGroupName(
-  name
-) {
-
-  return String(
-    name || ""
-  )
-    .normalize(
-      "NFKC"
-    )
+function normalizeGroupName(name) {
+  return String(name || "")
+    .normalize("NFKC")
     .toLowerCase()
     .replace(
       /[\u200B-\u200D\uFEFF]/g,
       ""
     )
-    .replace(
-      /\s+/g,
-      " "
-    )
+    .replace(/\s+/g, " ")
     .trim();
-
 }
-
-/*
-========================================================
-GROUP MATCH
-========================================================
-*/
 
 function groupMatches(
   actualName,
   targetName
 ) {
-
   const actual =
     normalizeGroupName(
       actualName
@@ -896,97 +530,53 @@ function groupMatches(
       targetName
     );
 
-  if (
-    !actual ||
-    !target
-  ) {
-
+  if (!actual || !target) {
     return false;
+  }
 
+  if (actual === target) {
+    return true;
   }
 
   if (
-    actual ===
-    target
+    actual.includes(target) ||
+    target.includes(actual)
   ) {
-
     return true;
-
-  }
-
-  if (
-    actual.includes(
-      target
-    ) ||
-    target.includes(
-      actual
-    )
-  ) {
-
-    return true;
-
   }
 
   const a =
-    actual.replace(
-      /\s+/g,
-      ""
-    );
+    actual.replace(/\s+/g, "");
 
   const t =
-    target.replace(
-      /\s+/g,
-      ""
-    );
+    target.replace(/\s+/g, "");
 
   return (
     a === t ||
     a.includes(t) ||
     t.includes(a)
   );
-
 }
 
 /*
-========================================================
+==================================================
 HTML ESCAPE
-========================================================
+==================================================
 */
 
-function escapeHTML(
-  text
-) {
-
-  return String(
-    text || ""
-  )
-    .replace(
-      /&/g,
-      "&amp;"
-    )
-    .replace(
-      /</g,
-      "&lt;"
-    )
-    .replace(
-      />/g,
-      "&gt;"
-    )
-    .replace(
-      /"/g,
-      "&quot;"
-    )
-    .replace(
-      /'/g,
-      "&#039;"
-    );
-
+function escapeHTML(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 /*
-========================================================
-BOT VARIABLES
-========================================================
+==================================================
+BOT STATE
+==================================================
 */
 
 let sock = null;
@@ -1006,105 +596,67 @@ let reconnecting = false;
 
 let connectedAt = null;
 
-const QR_EXPIRE =
-  50000;
+const QR_EXPIRE = 50000;
 
 /*
-========================================================
+==================================================
 EXPRESS
-========================================================
+==================================================
 */
 
-const app =
-  express();
+const app = express();
 
 app.use(
   express.json()
 );
 
 /*
-========================================================
-TARGET GROUP CHECK
-========================================================
+==================================================
+TARGET GROUP
+==================================================
 */
 
-function isTargetGroup(
-  jid
-) {
-
-  const normalized =
-    normalizeJid(
-      jid
-    );
-
+function isTargetGroup(jid) {
   return savedGroups.some(
     group =>
-      normalizeJid(
-        group.jid
-      ) ===
-      normalized
+      group.jid === jid
   );
-
 }
 
 /*
-========================================================
+==================================================
 GROUP MESSAGE COUNT
-========================================================
+==================================================
 */
 
 function getGroupMessageCount(
   groupJid
 ) {
-
   const data =
-    messageLog[
-      groupJid
-    ] || {};
+    messageLog[groupJid] || {};
 
   let total = 0;
 
-  for (
-    const sender
-    of Object.keys(data)
-  ) {
-
-    if (
-      Array.isArray(
-        data[sender]
-      )
-    ) {
-
-      total +=
-        data[sender].length;
-
+  for (const sender of Object.keys(data)) {
+    if (Array.isArray(data[sender])) {
+      total += data[sender].length;
     }
-
   }
 
   return total;
-
 }
 
 /*
-========================================================
+==================================================
 MEMBER MESSAGE COUNT
-
-Supports:
-- LID
-- phone JID
-- participant ID
-- phoneNumber
-========================================================
+==================================================
 */
 
 function getMessagesForMember(
   groupData,
   participant
 ) {
-
-  const candidates =
-    new Set();
+  const candidates = new Set();
 
   const ids = [
     participant?.id,
@@ -1112,15 +664,8 @@ function getMessagesForMember(
     participant?.phoneNumber
   ];
 
-  for (
-    const id
-    of ids
-  ) {
-
-    const n =
-      normalizeJid(
-        id
-      );
+  for (const id of ids) {
+    const n = normalizeJid(id);
 
     if (!n) {
       continue;
@@ -1132,367 +677,56 @@ function getMessagesForMember(
       isLid(n) &&
       lidMap[n]
     ) {
-
       candidates.add(
         normalizeJid(
           lidMap[n]
         )
       );
-
     }
-
   }
 
-  /*
-  Reverse mapping:
-  phone -> lid
-  */
-
   for (
-    const [
-      lid,
-      phone
-    ]
-    of Object.entries(
-      lidMap
-    )
+    const [lid, phone]
+    of Object.entries(lidMap)
   ) {
-
-    for (
-      const id
-      of ids
-    ) {
-
-      const n =
-        normalizeJid(
-          id
-        );
+    for (const id of ids) {
+      const n = normalizeJid(id);
 
       if (
         isPhoneJid(n) &&
-        normalizeJid(
-          phone
-        ) === n
+        normalizeJid(phone) === n
       ) {
-
         candidates.add(
-          normalizeJid(
-            lid
-          )
+          normalizeJid(lid)
         );
-
       }
-
     }
-
   }
 
   let result = [];
 
-  for (
-    const key
-    of candidates
-  ) {
-
+  for (const key of candidates) {
     if (
       Array.isArray(
         groupData[key]
       )
     ) {
-
       result =
         result.concat(
           groupData[key]
         );
-
     }
-
   }
 
   return [
-    ...new Set(
-      result
-    )
+    ...new Set(result)
   ];
-
 }
 
 /*
-========================================================
-WARNING KEY FINDER
-========================================================
-*/
-
-function findWarningKey(
-  groupJid,
-  participant
-) {
-
-  if (
-    !warnings[groupJid]
-  ) {
-
-    return null;
-
-  }
-
-  const privateJid =
-    getPrivateJid(
-      participant
-    );
-
-  const possibleKeys = [
-    participant?.id,
-    participant?.lid,
-    participant?.phoneNumber,
-    privateJid
-  ];
-
-  for (
-    const id
-    of possibleKeys
-  ) {
-
-    const n =
-      normalizeJid(
-        id
-      );
-
-    if (
-      n &&
-      warnings[groupJid][n]
-    ) {
-
-      return n;
-
-    }
-
-  }
-
-  /*
-  Try phone mapping.
-  */
-
-  for (
-    const id
-    of possibleKeys
-  ) {
-
-    const phone =
-      getPhoneFromAnyId(
-        id
-      );
-
-    if (!phone) {
-      continue;
-    }
-
-    const key =
-      `${phone}@s.whatsapp.net`;
-
-    if (
-      warnings[groupJid][key]
-    ) {
-
-      return key;
-
-    }
-
-  }
-
-  return null;
-
-}
-
-/*
-========================================================
-CLEAR MEMBER WARNING
-========================================================
-*/
-
-function clearMemberWarning(
-  groupJid,
-  participant
-) {
-
-  if (
-    !warnings[groupJid]
-  ) {
-
-    return false;
-
-  }
-
-  let changed =
-    false;
-
-  const privateJid =
-    getPrivateJid(
-      participant
-    );
-
-  const possibleKeys = [
-    participant?.id,
-    participant?.lid,
-    participant?.phoneNumber,
-    privateJid
-  ];
-
-  for (
-    const id
-    of possibleKeys
-  ) {
-
-    const n =
-      normalizeJid(
-        id
-      );
-
-    if (
-      n &&
-      warnings[groupJid][n]
-    ) {
-
-      delete warnings[groupJid][n];
-
-      changed =
-        true;
-
-    }
-
-  }
-
-  /*
-  Also clear mapped phone key.
-  */
-
-  for (
-    const id
-    of possibleKeys
-  ) {
-
-    const phone =
-      getPhoneFromAnyId(
-        id
-      );
-
-    if (!phone) {
-      continue;
-    }
-
-    const key =
-      `${phone}@s.whatsapp.net`;
-
-    if (
-      warnings[groupJid][key]
-    ) {
-
-      delete warnings[groupJid][key];
-
-      changed =
-        true;
-
-    }
-
-  }
-
-  return changed;
-
-}
-
-/*
-========================================================
-IS BOT / OWNER
-========================================================
-*/
-
-function isOwnerParticipant(
-  participant
-) {
-
-  if (!ownerJid) {
-    return false;
-  }
-
-  const owner =
-    normalizeJid(
-      ownerJid
-    );
-
-  const candidates = [
-    participant?.id,
-    participant?.lid,
-    participant?.phoneNumber
-  ];
-
-  for (
-    const id
-    of candidates
-  ) {
-
-    const n =
-      normalizeJid(
-        id
-      );
-
-    if (
-      n &&
-      n === owner
-    ) {
-
-      return true;
-
-    }
-
-    const phone =
-      getPhoneFromAnyId(
-        n
-      );
-
-    const ownerPhone =
-      getPhoneFromAnyId(
-        owner
-      );
-
-    if (
-      phone &&
-      ownerPhone &&
-      phone === ownerPhone
-    ) {
-
-      return true;
-
-    }
-
-  }
-
-  return false;
-
-}
-
-/*
-========================================================
-IS ADMIN
-========================================================
-*/
-
-function isAdminParticipant(
-  participant
-) {
-
-  return (
-    participant?.admin ===
-      "admin" ||
-    participant?.admin ===
-      "superadmin"
-  );
-
-}
-
-/*
-========================================================
+==================================================
 PRIVATE WARNING
-========================================================
+==================================================
 */
 
 async function sendPrivateWarning(
@@ -1500,56 +734,13 @@ async function sendPrivateWarning(
   groupName,
   participant
 ) {
-
   try {
-
-    /*
-    Do not warn owner.
-    */
-
-    if (
-      isOwnerParticipant(
-        participant
-      )
-    ) {
-
-      console.log(
-        "⚠️ WARNING SKIPPED - BOT/OWNER"
-      );
-
-      return false;
-
-    }
-
-    /*
-    Admins are not removed, therefore
-    no warning is needed for them.
-    */
-
-    if (
-      isAdminParticipant(
-        participant
-      )
-    ) {
-
-      console.log(
-        "⚠️ WARNING SKIPPED - ADMIN:",
-        getMemberNumber(
-          participant
-        )
-      );
-
-      return false;
-
-    }
-
     const privateJid =
       getPrivateJid(
         participant
       );
 
     if (!privateJid) {
-
       console.log(
         "⚠️ WARNING SKIPPED - NO PHONE:",
         participant?.id ||
@@ -1557,7 +748,14 @@ async function sendPrivateWarning(
       );
 
       return false;
+    }
 
+    if (
+      ownerJid &&
+      normalizeJid(privateJid) ===
+      normalizeJid(ownerJid)
+    ) {
+      return false;
     }
 
     const number =
@@ -1596,29 +794,25 @@ Please group mein kam az kam ek message kar dein taake aap active count ho jayen
     console.log(
       "⚠️ PRIVATE WARNING SENT:",
       number,
-      "| GROUP:",
+      "FROM:",
       groupName
     );
 
     return true;
-
   } catch (error) {
-
     console.log(
       "❌ PRIVATE WARNING ERROR:",
       error.message
     );
 
     return false;
-
   }
-
 }
 
 /*
-========================================================
+==================================================
 REMOVE MEMBER
-========================================================
+==================================================
 */
 
 async function removeMember(
@@ -1626,52 +820,10 @@ async function removeMember(
   groupName,
   participant
 ) {
-
   try {
-
-    /*
-    Owner protection.
-    */
-
-    if (
-      isOwnerParticipant(
-        participant
-      )
-    ) {
-
-      console.log(
-        "🛡️ REMOVE SKIPPED - OWNER"
-      );
-
-      return false;
-
-    }
-
-    /*
-    Admin protection.
-    */
-
-    if (
-      isAdminParticipant(
-        participant
-      )
-    ) {
-
-      console.log(
-        "🛡️ REMOVE SKIPPED - ADMIN:",
-        getMemberNumber(
-          participant
-        )
-      );
-
-      return false;
-
-    }
-
     const memberJid =
       normalizeJid(
-        participant?.id ||
-        ""
+        participant?.id || ""
       );
 
     const phoneJid =
@@ -1684,31 +836,31 @@ async function removeMember(
       phoneJid;
 
     if (!target) {
-
       console.log(
         "❌ REMOVE SKIPPED - NO JID"
       );
 
       return false;
-
     }
-
-    /*
-    Never remove owner.
-    */
 
     if (
       ownerJid &&
-      normalizeJid(
-        target
-      ) ===
-      normalizeJid(
-        ownerJid
-      )
+      normalizeJid(target) ===
+      normalizeJid(ownerJid)
     ) {
+      return false;
+    }
+
+    if (
+      participant?.admin === "admin" ||
+      participant?.admin === "superadmin"
+    ) {
+      console.log(
+        "⚠️ REMOVE SKIPPED - ADMIN:",
+        target
+      );
 
       return false;
-
     }
 
     await sock.groupParticipantsUpdate(
@@ -1719,30 +871,20 @@ async function removeMember(
 
     console.log(
       "🚫 MEMBER REMOVED:",
-      getMemberNumber(
-        participant
-      ),
-      "| GROUP:",
+      getMemberNumber(participant),
+      "FROM:",
       groupName
     );
 
-    /*
-    Private removal message.
-    */
-
-    const privateChat =
+    const privateJid =
       getPrivateJid(
         participant
       );
 
-    if (
-      privateChat
-    ) {
-
+    if (privateJid) {
       try {
-
         await sock.sendMessage(
-          privateChat,
+          privateJid,
           {
             text:
 `🚫 *GROUP REMOVAL NOTICE*
@@ -1755,125 +897,78 @@ Pichlay 2 consecutive 7-day periods mein aap ke messages *0* rahe.
 Agar aapko lagta hai ke ye action ghalat hua hai to group admin se rabta karein.`
           }
         );
-
-      } catch (error) {
-
-        console.log(
-          "⚠️ Removal notice could not be sent:",
-          error.message
-        );
-
-      }
-
+      } catch {}
     }
 
     return true;
-
   } catch (error) {
-
     console.log(
       "❌ REMOVE ERROR:",
       error.message
     );
 
     return false;
-
   }
-
 }
 
 /*
-========================================================
+==================================================
 REPORT
-========================================================
+IMPORTANT:
+processWarnings = false
+    => ONLY REPORT
 
-VERY IMPORTANT:
-
-Report group mein jayegi.
-
-Warning private chat mein jayegi.
-
-Removal attempt group se hoga.
-
-========================================================
+processWarnings = true
+    => REPORT + WARNING/REMOVAL
+==================================================
 */
 
 async function sendReport(
-  groupJid
+  groupJid,
+  processWarnings = false
 ) {
-
   try {
-
-    if (
-      !sock
-    ) {
-
-      return;
-
-    }
-
     const meta =
       await sock.groupMetadata(
         groupJid
       );
 
     const groupData =
-      messageLog[groupJid] ||
-      {};
-
-    if (
-      !warnings[groupJid]
-    ) {
-
-      warnings[groupJid] = {};
-
-    }
+      messageLog[groupJid] || {};
 
     const active = [];
-
     const inactive = [];
 
-    let totalMessages =
-      0;
+    let totalMessages = 0;
 
     /*
-    ========================================
-    PROCESS MEMBERS
-    ========================================
+    ----------------------------------------------
+    MEMBER COUNTS
+    ----------------------------------------------
     */
 
     for (
       const participant
-      of meta.participants ||
-      []
+      of meta.participants || []
     ) {
-
-      /*
-      Save LID mapping.
-      */
-
       if (
         participant.id &&
         participant.phoneNumber
       ) {
-
         rememberIdentity(
           participant.id,
           participant.phoneNumber
         );
-
       }
 
       if (
         participant.lid &&
         participant.phoneNumber
       ) {
-
         rememberIdentity(
           participant.lid,
           participant.phoneNumber
         );
-
       }
 
       const times =
@@ -1890,43 +985,30 @@ async function sendReport(
           participant
         );
 
-      if (
-        count > 0
-      ) {
-
+      if (count > 0) {
         active.push({
           number,
           count
         });
 
-        totalMessages +=
-          count;
-
+        totalMessages += count;
       } else {
-
         inactive.push({
           number,
           count: 0
         });
-
       }
-
     }
-
-    /*
-    Highest messages first.
-    */
 
     active.sort(
       (a, b) =>
-        b.count -
-        a.count
+        b.count - a.count
     );
 
     /*
-    ========================================
-    GROUP REPORT TEXT
-    ========================================
+    ----------------------------------------------
+    REPORT TEXT
+    ----------------------------------------------
     */
 
     let text =
@@ -1953,12 +1035,6 @@ async function sendReport(
     text +=
       `💬 *TOTAL MESSAGES:* ${totalMessages}\n\n`;
 
-    /*
-    ========================================
-    ACTIVE
-    ========================================
-    */
-
     text +=
       "┏━━━━━━━━━━━━━━━━━━━━┓\n";
 
@@ -1968,22 +1044,13 @@ async function sendReport(
     text +=
       "┗━━━━━━━━━━━━━━━━━━━━┛\n\n";
 
-    if (
-      !active.length
-    ) {
-
+    if (!active.length) {
       text +=
         "😅 Kisi ne message nahi kiya.\n\n";
-
     } else {
-
       let i = 1;
 
-      for (
-        const user
-        of active
-      ) {
-
+      for (const user of active) {
         text +=
           `${i}. 📱 *${user.number}*\n`;
 
@@ -1991,16 +1058,8 @@ async function sendReport(
           `   💬 *${user.count} messages*\n\n`;
 
         i++;
-
       }
-
     }
-
-    /*
-    ========================================
-    ZERO
-    ========================================
-    */
 
     text +=
       "┏━━━━━━━━━━━━━━━━━━━━┓\n";
@@ -2011,29 +1070,18 @@ async function sendReport(
     text +=
       "┗━━━━━━━━━━━━━━━━━━━━┛\n\n";
 
-    if (
-      !inactive.length
-    ) {
-
+    if (!inactive.length) {
       text +=
         "🎉 Sab members active hain!\n";
-
     } else {
-
       let i = 1;
 
-      for (
-        const user
-        of inactive
-      ) {
-
+      for (const user of inactive) {
         text +=
           `${i}. 📱 ${user.number} — *0 messages* 🚫\n`;
 
         i++;
-
       }
-
     }
 
     text +=
@@ -2052,9 +1100,9 @@ async function sendReport(
       "━━━━━━━━━━━━━━━━━━━━";
 
     /*
-    ========================================
-    SEND GROUP REPORT
-    ========================================
+    ----------------------------------------------
+    REPORT ALWAYS GOES TO GROUP
+    ----------------------------------------------
     */
 
     await sock.sendMessage(
@@ -2065,16 +1113,74 @@ async function sendReport(
     );
 
     /*
-    ========================================
-    CLEAR WARNINGS FOR ACTIVE USERS
-    ========================================
+    ==================================================
+    VERY IMPORTANT
+    ==================================================
+
+    Agar processWarnings FALSE hai:
+
+    !rana
+    !stats
+
+    dono yahan se return kar jayenge.
+
+    Isliye manual command se:
+    ❌ warning nahi
+    ❌ removal nahi
+    ❌ warning data change nahi
+
+    Sirf report.
+    ==================================================
+    */
+
+    if (!processWarnings) {
+      console.log(
+        "📊 REPORT ONLY - NO WARNING/REMOVAL:",
+        meta.subject
+      );
+
+      return;
+    }
+
+    /*
+    ==================================================
+    AUTOMATIC 7-DAY WARNING / REMOVAL
+    ==================================================
+    */
+
+    if (!warnings[groupJid]) {
+      warnings[groupJid] = {};
+    }
+
+    /*
+    ----------------------------------------------
+    ACTIVE MEMBERS CLEAR OLD WARNING
+    ----------------------------------------------
     */
 
     for (
       const participant
-      of meta.participants ||
-      []
+      of meta.participants || []
     ) {
+      const ids = [
+        participant?.id,
+        participant?.lid,
+        participant?.phoneNumber
+      ];
+
+      let warningKey = null;
+
+      for (const id of ids) {
+        const n = normalizeJid(id);
+
+        if (
+          n &&
+          warnings[groupJid][n]
+        ) {
+          warningKey = n;
+          break;
+        }
+      }
 
       const times =
         getMessagesForMember(
@@ -2082,62 +1188,30 @@ async function sendReport(
           participant
         );
 
-      const count =
-        times.length;
-
-      if (
-        count > 0
-      ) {
-
-        const cleared =
-          clearMemberWarning(
-            groupJid,
-            participant
-          );
-
-        if (
-          cleared
-        ) {
+      if (times.length > 0) {
+        if (warningKey) {
+          delete warnings[groupJid][warningKey];
 
           console.log(
-            "✅ WARNING CLEARED:",
+            "✅ WARNING CLEARED - ACTIVE:",
             getMemberNumber(
               participant
             )
           );
-
         }
-
       }
-
     }
 
     /*
-    ========================================
+    ----------------------------------------------
     PROCESS ZERO MEMBERS
-    ========================================
-
-    First zero period:
-      PRIVATE WARNING
-
-    Second consecutive zero period:
-      REMOVE
-
-    Admin:
-      SKIP
-
-    Owner:
-      SKIP
-
-    ========================================
+    ----------------------------------------------
     */
 
     for (
       const participant
-      of meta.participants ||
-      []
+      of meta.participants || []
     ) {
-
       const times =
         getMessagesForMember(
           groupData,
@@ -2147,80 +1221,62 @@ async function sendReport(
       const count =
         times.length;
 
-      /*
-      Active = nothing to do.
-      */
-
-      if (
-        count > 0
-      ) {
-
+      if (count !== 0) {
         continue;
-
       }
 
       /*
-      Owner protection.
+      Skip owner/bot.
       */
 
-      if (
-        isOwnerParticipant(
+      const privateJid =
+        getPrivateJid(
           participant
-        )
-      ) {
-
-        continue;
-
-      }
-
-      /*
-      Admin protection.
-      */
-
-      if (
-        isAdminParticipant(
-          participant
-        )
-      ) {
-
-        console.log(
-          "🛡️ ADMIN ZERO - NO WARNING/REMOVAL:",
-          getMemberNumber(
-            participant
-          )
         );
 
+      if (
+        ownerJid &&
+        privateJid &&
+        normalizeJid(privateJid) ===
+        normalizeJid(ownerJid)
+      ) {
         continue;
-
       }
 
       /*
       Find previous warning.
       */
 
-      const warningKey =
-        findWarningKey(
-          groupJid,
-          participant
-        );
+      let existingWarning = null;
 
-      const existingWarning =
-        warningKey
-          ? warnings[groupJid][
-              warningKey
-            ]
-          : null;
+      const possibleKeys = [
+        participant?.id,
+        participant?.lid,
+        participant?.phoneNumber,
+        privateJid
+      ];
+
+      for (const id of possibleKeys) {
+        const n = normalizeJid(id);
+
+        if (
+          n &&
+          warnings[groupJid][n]
+        ) {
+          existingWarning =
+            warnings[groupJid][n];
+
+          break;
+        }
+      }
 
       /*
-      ======================================
+      ----------------------------------------------
       FIRST ZERO PERIOD
-      ======================================
+      ----------------------------------------------
       */
 
-      if (
-        !existingWarning
-      ) {
-
+      if (!existingWarning) {
         const sent =
           await sendPrivateWarning(
             groupJid,
@@ -2228,15 +1284,7 @@ async function sendReport(
             participant
           );
 
-        if (
-          sent
-        ) {
-
-          const privateJid =
-            getPrivateJid(
-              participant
-            );
-
+        if (sent) {
           const key =
             normalizeJid(
               privateJid ||
@@ -2244,41 +1292,21 @@ async function sendReport(
               participant?.lid
             );
 
-          if (
-            key
-          ) {
-
-            warnings[groupJid][
-              key
-            ] = {
-              warnedAt:
-                Date.now()
+          if (key) {
+            warnings[groupJid][key] = {
+              warnedAt: Date.now()
             };
-
           }
-
-          /*
-          Save immediately so warning
-          survives restart.
-          */
-
-          await saveCloud(
-            "warnings",
-            warnings
-          );
-
         }
-
       }
 
       /*
-      ======================================
+      ----------------------------------------------
       SECOND ZERO PERIOD
-      ======================================
+      ----------------------------------------------
       */
 
       else {
-
         console.log(
           "🚫 SECOND ZERO PERIOD:",
           getMemberNumber(
@@ -2286,78 +1314,29 @@ async function sendReport(
           )
         );
 
-        const removed =
-          await removeMember(
-            groupJid,
-            meta.subject,
-            participant
-          );
-
-        /*
-        Delete warning after removal
-        attempt so next cycle does not
-        repeatedly try based on old warning.
-        */
-
-        if (
-          warningKey
-        ) {
-
-          delete warnings[groupJid][
-            warningKey
-          ];
-
-        }
-
-        /*
-        Also clear every possible
-        duplicate warning key.
-        */
-
-        const possibleKeys = [
-          participant?.id,
-          participant?.lid,
-          participant?.phoneNumber,
-          getPrivateJid(
-            participant
-          )
-        ];
-
-        for (
-          const id
-          of possibleKeys
-        ) {
-
-          const key =
-            normalizeJid(
-              id
-            );
-
-          if (
-            key &&
-            warnings[groupJid][key]
-          ) {
-
-            delete warnings[groupJid][
-              key
-            ];
-
-          }
-
-        }
-
-        console.log(
-          removed
-            ? "✅ REMOVE ATTEMPT COMPLETE"
-            : "⚠️ REMOVE ATTEMPT FAILED/SKIPPED"
+        await removeMember(
+          groupJid,
+          meta.subject,
+          participant
         );
 
-      }
+        for (const id of possibleKeys) {
+          const n = normalizeJid(id);
 
+          if (
+            n &&
+            warnings[groupJid][n]
+          ) {
+            delete warnings[groupJid][n];
+          }
+        }
+      }
     }
 
     /*
-    Save identity/warnings.
+    ----------------------------------------------
+    SAVE WARNING DATA
+    ----------------------------------------------
     */
 
     await saveCloud(
@@ -2371,42 +1350,29 @@ async function sendReport(
     );
 
     console.log(
-      "✅ REPORT SENT:",
+      "✅ REPORT + WARNING PROCESS COMPLETE:",
       meta.subject
     );
-
   } catch (error) {
-
     console.log(
       "❌ REPORT ERROR:",
       error.message
     );
-
-    lastError =
-      error.message;
-
   }
-
 }
 
 /*
-========================================================
+==================================================
 GROUP SCAN
-========================================================
+==================================================
 */
 
 async function findTargetGroups() {
-
-  if (
-    !sock
-  ) {
-
+  if (!sock) {
     return;
-
   }
 
   try {
-
     console.log(
       "🔍 Scanning groups..."
     );
@@ -2418,11 +1384,8 @@ async function findTargetGroups() {
 
     for (
       const jid
-      of Object.keys(
-        groups
-      )
+      of Object.keys(groups)
     ) {
-
       const group =
         groups[jid];
 
@@ -2432,8 +1395,7 @@ async function findTargetGroups() {
 
       const name =
         String(
-          group.subject ||
-          ""
+          group.subject || ""
         ).trim();
 
       if (!name) {
@@ -2444,7 +1406,6 @@ async function findTargetGroups() {
         jid,
         name
       });
-
     }
 
     allGroups =
@@ -2461,7 +1422,6 @@ async function findTargetGroups() {
       const targetName
       of TARGET_GROUP_NAMES
     ) {
-
       const match =
         foundAll.find(
           group =>
@@ -2479,29 +1439,16 @@ async function findTargetGroups() {
             match.jid
         )
       ) {
-
         detected.push({
-          jid:
-            match.jid,
-          name:
-            match.name,
-          target:
-            targetName
+          jid: match.jid,
+          name: match.name,
+          target: targetName
         });
-
       }
-
     }
 
-    /*
-    Keep only configured targets.
-    */
-
     savedGroups =
-      detected.slice(
-        0,
-        TARGET_GROUP_NAMES.length
-      );
+      detected.slice(0, 2);
 
     saveJSON(
       GROUP_FILE,
@@ -2527,20 +1474,7 @@ async function findTargetGroups() {
       "🎯 TARGET GROUPS:",
       savedGroups.length
     );
-
-    for (
-      const group
-      of savedGroups
-    ) {
-
-      console.log(
-        `🎯 ${group.name} -> ${group.jid}`
-      );
-
-    }
-
   } catch (error) {
-
     console.log(
       "❌ GROUP SCAN ERROR:",
       error.message
@@ -2548,21 +1482,16 @@ async function findTargetGroups() {
 
     lastError =
       error.message;
-
   }
-
 }
 
 /*
-========================================================
-GROUP LIST COMMAND
-========================================================
+==================================================
+GROUP LIST
+==================================================
 */
 
-async function sendGroupsList(
-  chat
-) {
-
+async function sendGroupsList(chat) {
   let text =
     "╭━━━━━━━━━━━━━━━━━━━━╮\n";
 
@@ -2572,30 +1501,17 @@ async function sendGroupsList(
   text +=
     "╰━━━━━━━━━━━━━━━━━━━━╯\n\n";
 
-  if (
-    !allGroups.length
-  ) {
-
+  if (!allGroups.length) {
     text +=
       "❌ Groups abhi detect nahi hue.";
-
   } else {
-
     allGroups.forEach(
-      (
-        group,
-        index
-      ) => {
-
+      (group, index) => {
         const target =
           savedGroups.some(
             g =>
-              normalizeJid(
-                g.jid
-              ) ===
-              normalizeJid(
-                group.jid
-              )
+              g.jid ===
+              group.jid
           );
 
         text +=
@@ -2604,10 +1520,8 @@ async function sendGroupsList(
               ? "🎯"
               : "📁"
           } *${group.name}*\n`;
-
       }
     );
-
   }
 
   await sock.sendMessage(
@@ -2616,226 +1530,171 @@ async function sendGroupsList(
       text
     }
   );
-
 }
 
 /*
-========================================================
+==================================================
 DURATION
-========================================================
+==================================================
 */
 
-function formatDuration(
-  ms
-) {
-
+function formatDuration(ms) {
   const totalSeconds =
-    Math.floor(
-      ms / 1000
-    );
+    Math.floor(ms / 1000);
 
   const days =
     Math.floor(
-      totalSeconds /
-      86400
+      totalSeconds / 86400
     );
 
   const hours =
     Math.floor(
-      (
-        totalSeconds %
-        86400
-      ) / 3600
+      (totalSeconds % 86400) /
+      3600
     );
 
   const minutes =
     Math.floor(
-      (
-        totalSeconds %
-        3600
-      ) / 60
+      (totalSeconds % 3600) /
+      60
     );
 
   return `${days}d ${hours}h ${minutes}m`;
-
 }
 
 /*
-========================================================
+==================================================
 DASHBOARD
-========================================================
+==================================================
 */
 
-app.get(
-  "/",
-  async (
-    req,
-    res
-  ) => {
+app.get("/", async (req, res) => {
+  let qrImage = "";
 
-    let qrImage =
-      "";
+  if (latestQR) {
+    try {
+      qrImage =
+        await QRCode.toDataURL(
+          latestQR
+        );
+    } catch {}
+  }
 
-    if (
-      latestQR
-    ) {
+  const connected =
+    !!ownerJid;
 
-      try {
+  const elapsed =
+    Math.max(
+      0,
+      Date.now() -
+      Number(
+        botState.cycleStart ||
+        Date.now()
+      )
+    );
 
-        qrImage =
-          await QRCode.toDataURL(
-            latestQR
-          );
+  const totalTime =
+    REPORT_DAYS *
+    24 *
+    60 *
+    60 *
+    1000;
 
-      } catch {}
+  const progress =
+    Math.min(
+      100,
+      Math.round(
+        (elapsed / totalTime) *
+        100
+      )
+    );
 
-    }
+  const daysPassed =
+    Math.floor(
+      elapsed /
+      (
+        24 *
+        60 *
+        60 *
+        1000
+      )
+    );
 
-    const connected =
-      !!ownerJid;
+  const daysLeft =
+    Math.max(
+      0,
+      REPORT_DAYS -
+      daysPassed
+    );
 
-    const elapsed =
-      Math.max(
-        0,
-        Date.now() -
-        Number(
-          botState.cycleStart ||
-          Date.now()
-        )
-      );
+  let totalMessages = 0;
 
-    const totalTime =
-      REPORT_DAYS *
-      24 *
-      60 *
-      60 *
-      1000;
-
-    const progress =
-      Math.min(
-        100,
-        Math.round(
-          (
-            elapsed /
-            totalTime
-          ) * 100
-        )
-      );
-
-    const daysPassed =
-      Math.floor(
-        elapsed /
-        (
-          24 *
-          60 *
-          60 *
-          1000
-        )
-      );
-
-    const daysLeft =
-      Math.max(
-        0,
-        REPORT_DAYS -
-        daysPassed
-      );
-
-    let totalMessages =
-      0;
-
+  for (
+    const group
+    of Object.values(
+      messageLog
+    )
+  ) {
     for (
-      const group
+      const arr
       of Object.values(
-        messageLog
+        group || {}
       )
     ) {
-
-      for (
-        const arr
-        of Object.values(
-          group || {}
-        )
-      ) {
-
-        if (
-          Array.isArray(arr)
-        ) {
-
-          totalMessages +=
-            arr.length;
-
-        }
-
+      if (Array.isArray(arr)) {
+        totalMessages +=
+          arr.length;
       }
-
     }
+  }
 
-    let statusText =
-      "STARTING";
+  let statusText =
+    "STARTING";
 
-    let statusClass =
-      "yellow";
+  let statusClass =
+    "yellow";
 
-    if (
-      connected
-    ) {
+  if (connected) {
+    statusText =
+      "CONNECTED";
 
-      statusText =
-        "CONNECTED";
+    statusClass =
+      "green";
+  } else if (
+    connectionStatus === "qr"
+  ) {
+    statusText =
+      "SCAN QR";
 
-      statusClass =
-        "green";
+    statusClass =
+      "blue";
+  } else if (
+    connectionStatus ===
+    "disconnected"
+  ) {
+    statusText =
+      "RECONNECTING";
 
-    } else if (
-      connectionStatus ===
-      "qr"
-    ) {
+    statusClass =
+      "red";
+  }
 
-      statusText =
-        "SCAN QR";
-
-      statusClass =
-        "blue";
-
-    } else if (
-      connectionStatus ===
-      "disconnected"
-    ) {
-
-      statusText =
-        "RECONNECTING";
-
-      statusClass =
-        "red";
-
-    }
-
-    const groupsHTML =
-      savedGroups.length
-        ? savedGroups
-            .map(
-              (
-                group,
-                index
-              ) => `
+  const groupsHTML =
+    savedGroups.length
+      ? savedGroups.map(
+          (group, index) => `
 <div class="group-card">
-
   <div class="group-icon">
     ${index === 0 ? "🏢" : "🧪"}
   </div>
 
   <div class="group-info">
-
     <div class="group-name">
-      ${escapeHTML(
-        group.name
-      )}
+      ${escapeHTML(group.name)}
     </div>
 
     <div class="group-jid">
-      ${escapeHTML(
-        group.jid
-      )}
+      ${escapeHTML(group.jid)}
     </div>
 
     <div class="group-count">
@@ -2843,18 +1702,15 @@ app.get(
         group.jid
       )} messages
     </div>
-
   </div>
 
   <div class="active-badge">
-    ● DETECTED
+    ● TARGET
   </div>
-
 </div>
 `
-            )
-            .join("")
-        : `
+        ).join("")
+      : `
 <div class="empty-box">
   👥
   <b>No target groups detected</b>
@@ -2862,40 +1718,27 @@ app.get(
 </div>
 `;
 
-    const allGroupsHTML =
-      allGroups.length
-        ? allGroups
-            .map(
-              group => {
+  const allGroupsHTML =
+    allGroups.length
+      ? allGroups.map(
+          group => {
+            const target =
+              savedGroups.some(
+                g =>
+                  g.jid ===
+                  group.jid
+              );
 
-                const target =
-                  savedGroups.some(
-                    g =>
-                      normalizeJid(
-                        g.jid
-                      ) ===
-                      normalizeJid(
-                        group.jid
-                      )
-                  );
-
-                return `
+            return `
 <div class="all-group">
-
   <div>
-
     <div class="all-group-name">
-      ${escapeHTML(
-        group.name
-      )}
+      ${escapeHTML(group.name)}
     </div>
 
     <div class="all-group-jid">
-      ${escapeHTML(
-        group.jid
-      )}
+      ${escapeHTML(group.jid)}
     </div>
-
   </div>
 
   ${
@@ -2903,24 +1746,20 @@ app.get(
       ? `<span class="target-tag">TARGET</span>`
       : `<span class="normal-tag">GROUP</span>`
   }
-
 </div>
 `;
-
-              }
-            )
-            .join("")
-        : `
+          }
+        ).join("")
+      : `
 <div class="empty-box">
   No groups loaded yet.
 </div>
 `;
 
-    const qrHTML =
-      qrImage
-        ? `
+  const qrHTML =
+    qrImage
+      ? `
 <div class="qr-container">
-
   <div class="qr-title">
     📱 Scan QR with WhatsApp
   </div>
@@ -2934,12 +1773,10 @@ app.get(
   <div class="qr-refresh">
     🔄 QR automatically refreshes
   </div>
-
 </div>
 `
-        : `
+      : `
 <div class="qr-wait">
-
   <div class="spinner"></div>
 
   <h3>
@@ -2957,23 +1794,20 @@ app.get(
         : "QR generate hote hi yahan show hoga."
     }
   </p>
-
 </div>
 `;
 
-    const uptime =
-      connectedAt
-        ? formatDuration(
-            Date.now() -
-            connectedAt
-          )
-        : "Offline";
+  const uptime =
+    connectedAt
+      ? formatDuration(
+          Date.now() -
+          connectedAt
+        )
+      : "Offline";
 
-    res.send(`
+  res.send(`
 <!DOCTYPE html>
-
 <html>
-
 <head>
 
 <meta charset="UTF-8">
@@ -2989,7 +1823,7 @@ app.get(
 >
 
 <title>
-WhatsApp Report Bot • BAMB Dashboard
+WhatsApp Report Bot
 </title>
 
 <style>
@@ -2999,15 +1833,9 @@ WhatsApp Report Bot • BAMB Dashboard
 }
 
 body {
-
   margin: 0;
-
-  font-family:
-    Arial,
-    sans-serif;
-
+  font-family: Arial, sans-serif;
   color: white;
-
   min-height: 100vh;
 
   background:
@@ -3027,38 +1855,23 @@ body {
       transparent 35%
     ),
     #050713;
-
 }
 
 .container {
-
   width: 94%;
-
   max-width: 1400px;
-
   margin: auto;
-
-  padding:
-    25px 0 50px;
-
+  padding: 25px 0 50px;
 }
 
 .header {
-
   padding: 25px;
-
   margin-bottom: 20px;
-
   border-radius: 28px;
 
   display: flex;
-
-  justify-content:
-    space-between;
-
-  align-items:
-    center;
-
+  justify-content: space-between;
+  align-items: center;
   gap: 20px;
 
   background:
@@ -3076,35 +1889,22 @@ body {
   box-shadow:
     0 20px 80px
     rgba(0,0,0,.45);
-
 }
 
 .brand {
-
   display: flex;
-
-  align-items:
-    center;
-
+  align-items: center;
   gap: 15px;
-
 }
 
 .logo {
-
   width: 65px;
-
   height: 65px;
-
   border-radius: 20px;
 
   display: flex;
-
-  align-items:
-    center;
-
-  justify-content:
-    center;
+  align-items: center;
+  justify-content: center;
 
   font-size: 32px;
 
@@ -3120,32 +1920,21 @@ body {
   box-shadow:
     0 0 45px
     rgba(0,255,180,.35);
-
 }
 
 h1 {
-
   margin: 0;
-
   font-size: 25px;
-
 }
 
 .brand p {
-
   margin: 7px 0 0;
-
   color: #9aa8bd;
-
   font-size: 11px;
-
 }
 
 .status {
-
-  padding:
-    12px 18px;
-
+  padding: 12px 18px;
   border-radius: 50px;
 
   background:
@@ -3156,9 +1945,7 @@ h1 {
     rgba(255,255,255,.10);
 
   font-size: 11px;
-
   font-weight: 900;
-
 }
 
 .green {
@@ -3178,22 +1965,15 @@ h1 {
 }
 
 .stats {
-
   display: grid;
-
   grid-template-columns:
     repeat(4,1fr);
-
   gap: 15px;
-
   margin-bottom: 20px;
-
 }
 
 .stat {
-
   padding: 21px;
-
   border-radius: 22px;
 
   background:
@@ -3206,56 +1986,36 @@ h1 {
   box-shadow:
     0 15px 50px
     rgba(0,0,0,.25);
-
 }
 
 .stat-icon {
-
   font-size: 25px;
-
 }
 
 .stat-title {
-
   margin-top: 10px;
-
   color: #7f8da5;
-
   font-size: 9px;
-
   font-weight: 900;
-
   letter-spacing: 1px;
-
 }
 
 .stat-value {
-
   margin-top: 5px;
-
   font-size: 25px;
-
   font-weight: 900;
-
 }
 
 .grid {
-
   display: grid;
-
   grid-template-columns:
     1.15fr .85fr;
-
   gap: 20px;
-
 }
 
 .card {
-
   padding: 22px;
-
   margin-bottom: 20px;
-
   border-radius: 25px;
 
   background:
@@ -3271,113 +2031,70 @@ h1 {
 
   backdrop-filter:
     blur(15px);
-
 }
 
 .card-title {
-
   display: flex;
-
-  justify-content:
-    space-between;
-
-  align-items:
-    center;
-
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 18px;
-
 }
 
 .card-title h2 {
-
   margin: 0;
-
   font-size: 16px;
-
 }
 
 .card-title span {
-
   color: #718096;
-
   font-size: 9px;
-
   font-weight: 900;
-
 }
 
 .device {
-
   padding: 17px;
-
   border-radius: 18px;
-
-  background:
-    rgba(0,0,0,.22);
-
+  background: rgba(0,0,0,.22);
 }
 
 .device-row {
-
   display: flex;
-
-  justify-content:
-    space-between;
-
+  justify-content: space-between;
   gap: 15px;
-
   padding: 12px 0;
 
   border-bottom:
     1px solid
     rgba(255,255,255,.07);
-
 }
 
 .device-row:last-child {
-
   border-bottom: 0;
-
 }
 
 .device-label {
-
   color: #78859c;
-
   font-size: 11px;
-
 }
 
 .device-value {
-
   font-size: 12px;
-
   font-weight: 800;
-
   text-align: right;
-
   word-break: break-word;
-
 }
 
 .online {
-
   color: #00ff9d;
-
 }
 
 .notice {
-
   margin-top: 15px;
-
   padding: 13px;
-
   border-radius: 15px;
 
   color: #8fd8ff;
-
   font-size: 10px;
-
   line-height: 1.7;
 
   background:
@@ -3386,65 +2103,41 @@ h1 {
   border:
     1px solid
     rgba(0,150,255,.16);
-
 }
 
 .qr-container {
-
   text-align: center;
-
 }
 
 .qr {
-
   width: 250px;
-
   max-width: 100%;
-
   padding: 10px;
-
   background: white;
-
   border-radius: 20px;
-
 }
 
 .qr-title {
-
   margin-bottom: 15px;
-
   color: #c9d3e2;
-
   font-size: 12px;
-
   font-weight: 800;
-
 }
 
 .qr-refresh {
-
   margin-top: 12px;
-
   color: #65748a;
-
   font-size: 10px;
-
 }
 
 .qr-wait {
-
   text-align: center;
-
   padding: 35px 10px;
-
 }
 
 .spinner {
-
   width: 45px;
-
   height: 45px;
-
   margin: auto;
 
   border: 4px solid
@@ -3460,30 +2153,20 @@ h1 {
 
   animation:
     spin 1s linear infinite;
-
 }
 
 @keyframes spin {
-
   to {
     transform: rotate(360deg);
   }
-
 }
 
 .group-card {
-
   display: flex;
-
-  align-items:
-    center;
-
+  align-items: center;
   gap: 13px;
-
   padding: 14px;
-
   margin-bottom: 10px;
-
   border-radius: 18px;
 
   background:
@@ -3496,24 +2179,16 @@ h1 {
   border:
     1px solid
     rgba(255,255,255,.07);
-
 }
 
 .group-icon {
-
   width: 46px;
-
   height: 46px;
-
   flex-shrink: 0;
 
   display: flex;
-
-  align-items:
-    center;
-
-  justify-content:
-    center;
+  align-items: center;
+  justify-content: center;
 
   border-radius: 14px;
 
@@ -3524,77 +2199,47 @@ h1 {
       #7c3aed,
       #ec4899
     );
-
 }
 
 .group-info {
-
   flex: 1;
-
   min-width: 0;
-
 }
 
 .group-name {
-
   font-size: 13px;
-
   font-weight: 900;
-
   line-height: 1.4;
-
 }
 
 .group-jid {
-
   margin-top: 5px;
-
   color: #5e6b82;
-
   font-size: 8px;
-
   word-break: break-all;
-
 }
 
 .group-count {
-
   margin-top: 6px;
-
   color: #00ff9d;
-
   font-size: 10px;
-
   font-weight: 800;
-
 }
 
 .active-badge {
-
   color: #00ff9d;
-
   font-size: 8px;
-
   font-weight: 900;
-
 }
 
 .all-group {
-
   display: flex;
-
-  justify-content:
-    space-between;
-
-  align-items:
-    center;
-
+  justify-content: space-between;
+  align-items: center;
   gap: 10px;
 
   padding: 12px;
-
   margin-bottom: 8px;
-
   border-radius: 15px;
 
   background:
@@ -3603,99 +2248,62 @@ h1 {
   border:
     1px solid
     rgba(255,255,255,.05);
-
 }
 
 .all-group-name {
-
   font-size: 11px;
-
   font-weight: 800;
-
 }
 
 .all-group-jid {
-
   margin-top: 4px;
-
   color: #56647b;
-
   font-size: 8px;
-
   word-break: break-all;
-
 }
 
 .target-tag,
 .normal-tag {
-
-  padding:
-    5px 8px;
-
+  padding: 5px 8px;
   border-radius: 8px;
-
   font-size: 7px;
-
   font-weight: 900;
-
 }
 
 .target-tag {
-
   color: #00ff9d;
-
   background:
     rgba(0,255,157,.10);
-
 }
 
 .normal-tag {
-
   color: #7b879b;
-
   background:
     rgba(255,255,255,.04);
-
 }
 
 .progress-wrap {
-
   margin-top: 10px;
-
 }
 
 .progress-info {
-
   display: flex;
-
-  justify-content:
-    space-between;
-
+  justify-content: space-between;
   margin-bottom: 9px;
-
   color: #8b98ad;
-
   font-size: 10px;
-
 }
 
 .progress {
-
   height: 9px;
-
   overflow: hidden;
-
   border-radius: 20px;
-
   background:
     rgba(255,255,255,.07);
-
 }
 
 .progress-bar {
-
   width: ${progress}%;
-
   height: 100%;
 
   background:
@@ -3706,100 +2314,63 @@ h1 {
       #a855f7,
       #ff3cac
     );
-
 }
 
 .empty-box {
-
   padding: 30px;
-
   text-align: center;
-
   color: #8793a7;
-
 }
 
 .empty-box b {
-
   display: block;
-
   margin-top: 8px;
-
   color: white;
-
   font-size: 13px;
-
 }
 
 .empty-box small {
-
   display: block;
-
   margin-top: 7px;
-
   font-size: 10px;
-
 }
 
 .footer {
-
   text-align: center;
-
   color: #56647a;
-
   font-size: 9px;
-
 }
 
 @media(max-width:900px) {
-
   .stats {
-
     grid-template-columns:
       repeat(2,1fr);
-
   }
 
   .grid {
-
     grid-template-columns:
       1fr;
-
   }
-
 }
 
 @media(max-width:500px) {
-
   .header {
-
-    flex-direction:
-      column;
-
-    align-items:
-      flex-start;
-
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .stats {
-
     grid-template-columns:
       repeat(2,1fr);
-
   }
 
   .stat {
-
     padding: 15px;
-
   }
 
   .stat-value {
-
     font-size: 19px;
-
   }
-
 }
 
 </style>
@@ -3842,11 +2413,7 @@ h1 {
 
   <div class="stat">
     <div class="stat-icon">📱</div>
-
-    <div class="stat-title">
-      WHATSAPP
-    </div>
-
+    <div class="stat-title">WHATSAPP</div>
     <div class="stat-value">
       ${
         connected
@@ -3858,23 +2425,15 @@ h1 {
 
   <div class="stat">
     <div class="stat-icon">🎯</div>
-
-    <div class="stat-title">
-      TARGET GROUPS
-    </div>
-
+    <div class="stat-title">TARGET GROUPS</div>
     <div class="stat-value">
-      ${savedGroups.length}/${TARGET_GROUP_NAMES.length}
+      ${savedGroups.length}/2
     </div>
   </div>
 
   <div class="stat">
     <div class="stat-icon">💬</div>
-
-    <div class="stat-title">
-      MESSAGES
-    </div>
-
+    <div class="stat-title">MESSAGES</div>
     <div class="stat-value">
       ${totalMessages}
     </div>
@@ -3882,11 +2441,7 @@ h1 {
 
   <div class="stat">
     <div class="stat-icon">☁️</div>
-
-    <div class="stat-title">
-      STORAGE
-    </div>
-
+    <div class="stat-title">STORAGE</div>
     <div class="stat-value">
       ${
         supabase
@@ -3919,31 +2474,25 @@ h1 {
   <div class="device">
 
     <div class="device-row">
-
       <span class="device-label">
         Status
       </span>
 
       <span class="device-value online">
-
         ${
           connected
             ? "● Connected"
             : statusText
         }
-
       </span>
-
     </div>
 
     <div class="device-row">
-
       <span class="device-label">
         Number
       </span>
 
       <span class="device-value">
-
         ${
           ownerJid
             ? escapeHTML(
@@ -3953,13 +2502,24 @@ h1 {
               )
             : "Not linked"
         }
-
       </span>
-
     </div>
 
     <div class="device-row">
+      <span class="device-label">
+        Cloud Storage
+      </span>
 
+      <span class="device-value">
+        ${
+          supabase
+            ? "🟢 Active"
+            : "🟡 Waiting"
+        }
+      </span>
+    </div>
+
+    <div class="device-row">
       <span class="device-label">
         Uptime
       </span>
@@ -3967,49 +2527,28 @@ h1 {
       <span class="device-value">
         ${uptime}
       </span>
-
-    </div>
-
-    <div class="device-row">
-
-      <span class="device-label">
-        Cloud Storage
-      </span>
-
-      <span class="device-value">
-
-        ${
-          supabase
-            ? "🟢 Active"
-            : "🟡 Waiting"
-        }
-
-      </span>
-
     </div>
 
   </div>
 
   <div class="notice">
-
     ☁️ Message counting data Supabase mein
-    save hoga, isliye Render restart/sleep ke
-    baad cycle zero se start nahi hogi.
+    save hoga.
 
     <br><br>
 
-    ⚠️ 0 messages walay normal members ko
-    warning PRIVATE chat mein milegi.
+    📊 <b>!rana / !stats</b> =
+    sirf report.
 
     <br><br>
 
-    🚫 Agar warning ke baad aglay 7 din mein
-    bhi 0 messages rahe to removal attempt hoga.
+    ⚠️ Automatic 7-day cycle =
+    report + private warning.
 
     <br><br>
 
-    🛡️ Bot/owner aur group admins protected hain.
-
+    🚫 Do consecutive 7-day periods mein
+    0 messages par removal attempt.
   </div>
 
 </div>
@@ -4023,7 +2562,7 @@ h1 {
     </h2>
 
     <span>
-      ${savedGroups.length}/${TARGET_GROUP_NAMES.length}
+      ${savedGroups.length}/2
     </span>
 
   </div>
@@ -4118,85 +2657,31 @@ h1 {
 
   WhatsApp Report Bot
   • BAMB Dashboard
-  • !rana
-  • !stats
-  • !groups
-  • Private Warnings
-  • Auto Removal
+  • !rana = Report Only
+  • !stats = Report Only
+  • Automatic Private Warning
+  • Automatic Removal
 
 </div>
 
 </div>
 
 </body>
-
 </html>
 `);
-
-  }
-);
+});
 
 /*
-========================================================
-HEALTH CHECK
-========================================================
+==================================================
+HEALTH
+==================================================
 */
 
 app.get(
   "/health",
-  (
-    req,
-    res
-  ) => {
-
-    const messages =
-      Object.values(
-        messageLog
-      ).reduce(
-        (
-          total,
-          group
-        ) =>
-          total +
-          Object.values(
-            group || {}
-          ).reduce(
-            (
-              sum,
-              arr
-            ) =>
-              sum +
-              (
-                Array.isArray(
-                  arr
-                )
-                  ? arr.length
-                  : 0
-              ),
-            0
-          ),
-        0
-      );
-
-    const warningCount =
-      Object.values(
-        warnings
-      ).reduce(
-        (
-          total,
-          group
-        ) =>
-          total +
-          Object.keys(
-            group || {}
-          ).length,
-        0
-      );
-
+  (req, res) => {
     res.json({
-
-      status:
-        "ok",
+      status: "ok",
 
       whatsapp:
         ownerJid
@@ -4204,8 +2689,7 @@ app.get(
           : connectionStatus,
 
       owner:
-        ownerJid ||
-        null,
+        ownerJid || null,
 
       targetGroups:
         savedGroups,
@@ -4216,7 +2700,32 @@ app.get(
       cloud:
         !!supabase,
 
-      messages,
+      messages:
+        Object.values(
+          messageLog
+        ).reduce(
+          (
+            total,
+            group
+          ) =>
+            total +
+            Object.values(
+              group || {}
+            ).reduce(
+              (
+                sum,
+                arr
+              ) =>
+                sum +
+                (
+                  Array.isArray(arr)
+                    ? arr.length
+                    : 0
+                ),
+              0
+            ),
+          0
+        ),
 
       lidMappings:
         Object.keys(
@@ -4224,41 +2733,40 @@ app.get(
         ).length,
 
       warnings:
-        warningCount,
-
-      cycleStart:
-        botState.cycleStart,
+        Object.values(
+          warnings
+        ).reduce(
+          (
+            total,
+            group
+          ) =>
+            total +
+            Object.keys(
+              group || {}
+            ).length,
+          0
+        ),
 
       lastError:
-        lastError ||
-        null
-
+        lastError || null
     });
-
   }
 );
 
 /*
-========================================================
+==================================================
 START BOT
-========================================================
+==================================================
 */
 
 async function startBot() {
-
-  if (
-    reconnecting
-  ) {
-
+  if (reconnecting) {
     return;
-
   }
 
-  reconnecting =
-    true;
+  reconnecting = true;
 
   try {
-
     connectionStatus =
       "connecting";
 
@@ -4277,17 +2785,14 @@ async function startBot() {
 
     sock =
       makeWASocket({
-
         version,
 
         logger:
           pino({
-            level:
-              "silent"
+            level: "silent"
           }),
 
         auth: {
-
           creds:
             state.creds,
 
@@ -4295,11 +2800,9 @@ async function startBot() {
             makeCacheableSignalKeyStore(
               state.keys,
               pino({
-                level:
-                  "silent"
+                level: "silent"
               })
             )
-
         },
 
         printQRInTerminal:
@@ -4316,7 +2819,6 @@ async function startBot() {
 
         generateHighQualityLinkPreview:
           false
-
       });
 
     sock.ev.on(
@@ -4325,29 +2827,22 @@ async function startBot() {
     );
 
     /*
-    ========================================
+    ==============================================
     CONNECTION UPDATE
-    ========================================
+    ==============================================
     */
 
     sock.ev.on(
       "connection.update",
       async update => {
-
         const {
           connection,
           qr,
           lastDisconnect
         } = update;
 
-        /*
-        QR
-        */
-
         if (qr) {
-
-          latestQR =
-            qr;
+          latestQR = qr;
 
           qrGeneratedAt =
             Date.now();
@@ -4358,23 +2853,14 @@ async function startBot() {
           console.log(
             "📱 NEW QR GENERATED"
           );
-
         }
 
-        /*
-        CONNECTED
-        */
-
         if (
-          connection ===
-          "open"
+          connection === "open"
         ) {
+          latestQR = null;
 
-          latestQR =
-            null;
-
-          qrGeneratedAt =
-            0;
+          qrGeneratedAt = 0;
 
           ownerJid =
             sock.user?.id ||
@@ -4386,11 +2872,9 @@ async function startBot() {
           connectedAt =
             Date.now();
 
-          lastError =
-            "";
+          lastError = "";
 
-          reconnecting =
-            false;
+          reconnecting = false;
 
           console.log(
             "================================"
@@ -4411,11 +2895,15 @@ async function startBot() {
           );
 
           console.log(
-            "📊 MESSAGE COUNTING: ON"
+            "📊 !RANA: REPORT ONLY"
           );
 
           console.log(
-            "⚠️ PRIVATE WARNING: ON"
+            "📊 !STATS: REPORT ONLY"
+          );
+
+          console.log(
+            "⚠️ AUTO PRIVATE WARNING: ON"
           );
 
           console.log(
@@ -4423,49 +2911,32 @@ async function startBot() {
           );
 
           console.log(
-            "🛡️ ADMIN PROTECTION: ON"
-          );
-
-          console.log(
             "================================"
           );
 
           await findTargetGroups();
-
         }
 
-        /*
-        DISCONNECTED
-        */
-
         if (
-          connection ===
-          "close"
+          connection === "close"
         ) {
+          ownerJid = null;
 
-          ownerJid =
-            null;
+          connectedAt = null;
 
-          connectedAt =
-            null;
-
-          latestQR =
-            null;
+          latestQR = null;
 
           connectionStatus =
             "disconnected";
 
-          let statusCode =
-            null;
+          let statusCode = null;
 
           try {
-
             statusCode =
               lastDisconnect
                 ?.error
                 ?.output
                 ?.statusCode;
-
           } catch {}
 
           console.log(
@@ -4473,45 +2944,31 @@ async function startBot() {
             statusCode
           );
 
-          reconnecting =
-            false;
-
-          /*
-          Logged out:
-          do not endlessly reconnect.
-          */
+          reconnecting = false;
 
           if (
             statusCode ===
             DisconnectReason.loggedOut
           ) {
-
             console.log(
               "⚠️ WhatsApp logged out."
             );
 
             return;
-
           }
-
-          /*
-          Reconnect.
-          */
 
           setTimeout(
             startBot,
             5000
           );
-
         }
-
       }
     );
 
     /*
-    ========================================
+    ==============================================
     MESSAGE LISTENER
-    ========================================
+    ==============================================
     */
 
     sock.ev.on(
@@ -4520,60 +2977,36 @@ async function startBot() {
         messages,
         type
       }) => {
-
         try {
-
           if (
             !messages?.length ||
-            type !==
-              "notify"
+            type !== "notify"
           ) {
-
             return;
-
           }
 
-          let changed =
-            false;
+          let changed = false;
 
           for (
             const msg
             of messages
           ) {
-
             if (
               !msg ||
               !msg.message
             ) {
-
               continue;
-
             }
 
             const chat =
-              msg.key
-                .remoteJid;
-
-            /*
-            Only group messages.
-            */
+              msg.key.remoteJid;
 
             if (
               !chat ||
-              !chat.endsWith(
-                "@g.us"
-              )
+              !chat.endsWith("@g.us")
             ) {
-
               continue;
-
             }
-
-            /*
-            =================================
-            IDENTITIES
-            =================================
-            */
 
             const senderLid =
               msg.key.participant ||
@@ -4590,16 +3023,13 @@ async function startBot() {
                 senderPhone
               )
             ) {
-
-              changed =
-                true;
-
+              changed = true;
             }
 
             /*
-            =================================
-            TEXT
-            =================================
+            ==========================================
+            MESSAGE TEXT
+            ==========================================
             */
 
             const text =
@@ -4617,16 +3047,14 @@ async function startBot() {
               "";
 
             const command =
-              String(
-                text
-              )
+              String(text)
                 .trim()
                 .toLowerCase();
 
             /*
-            =================================
+            ==========================================
             OWNER CHECK
-            =================================
+            ==========================================
             */
 
             const ownerNormalized =
@@ -4644,8 +3072,7 @@ async function startBot() {
                 : null;
 
             const isOwner =
-              msg.key.fromMe ===
-                true ||
+              msg.key.fromMe === true ||
               (
                 ownerNormalized &&
                 phoneNormalized &&
@@ -4654,173 +3081,125 @@ async function startBot() {
               );
 
             /*
-            =================================
+            ==========================================
             !RANA
-            =================================
+            IMPORTANT:
+            REPORT ONLY
+            ==========================================
             */
 
             if (
-              command ===
-              "!rana"
+              command === "!rana"
             ) {
-
               if (
                 isOwner &&
-                isTargetGroup(
-                  chat
-                )
+                isTargetGroup(chat)
               ) {
-
                 await sendReport(
-                  chat
+                  chat,
+                  false
                 );
-
               }
 
               continue;
-
             }
 
             /*
-            =================================
+            ==========================================
             !STATS
-            =================================
+            IMPORTANT:
+            REPORT ONLY
+            ==========================================
             */
 
             if (
-              command ===
-              "!stats"
+              command === "!stats"
             ) {
-
               if (
                 isOwner &&
-                isTargetGroup(
-                  chat
-                )
+                isTargetGroup(chat)
               ) {
-
                 await sendReport(
-                  chat
+                  chat,
+                  false
                 );
-
               }
 
               continue;
-
             }
 
             /*
-            =================================
+            ==========================================
             !GROUPS
-            =================================
+            ==========================================
             */
 
             if (
-              command ===
-              "!groups"
+              command === "!groups"
             ) {
-
-              if (
-                isOwner
-              ) {
-
-                await findTargetGroups();
-
+              if (isOwner) {
                 await sendGroupsList(
                   chat
                 );
-
               }
 
               continue;
-
             }
 
             /*
-            =================================
+            ==========================================
             IGNORE BOT'S OWN NORMAL MESSAGE
-            =================================
+            ==========================================
             */
 
             if (
               msg.key.fromMe
             ) {
-
               continue;
-
             }
 
             /*
-            =================================
-            TARGET GROUP ONLY
-            =================================
+            ==========================================
+            TARGET GROUPS ONLY
+            ==========================================
             */
 
             if (
-              !isTargetGroup(
-                chat
-              )
+              !isTargetGroup(chat)
             ) {
-
               continue;
-
             }
 
-            /*
-            =================================
-            GET SENDER
-            =================================
-            */
-
-            let sender =
-              null;
-
-            if (
+            const sender =
               isPhoneJid(
                 senderPhone
               )
-            ) {
-
-              sender =
-                normalizeJid(
-                  senderPhone
-                );
-
-            } else {
-
-              sender =
-                normalizeJid(
-                  senderLid
-                );
-
-            }
+                ? normalizeJid(
+                    senderPhone
+                  )
+                : normalizeJid(
+                    senderLid
+                  );
 
             if (!sender) {
               continue;
             }
 
             /*
-            =================================
-            MESSAGE STORAGE
-            =================================
+            ==========================================
+            SAVE MESSAGE
+            ==========================================
             */
 
-            if (
-              !messageLog[chat]
-            ) {
-
-              messageLog[chat] =
-                {};
-
+            if (!messageLog[chat]) {
+              messageLog[chat] = {};
             }
 
             if (
               !messageLog[chat][sender]
             ) {
-
               messageLog[chat][sender] =
                 [];
-
             }
 
             const timestamp =
@@ -4829,23 +3208,19 @@ async function startBot() {
                 0
               ) * 1000;
 
-            messageLog[chat][sender]
-              .push(
-                timestamp ||
-                Date.now()
-              );
+            messageLog[chat][sender].push(
+              timestamp ||
+              Date.now()
+            );
 
             /*
-            =================================
-            IMPORTANT:
-            WARNING CLEAR
-            =================================
+            ==========================================
+            MEMBER SENT MESSAGE
+            CLEAR OLD WARNING IMMEDIATELY
+            ==========================================
             */
 
-            if (
-              warnings[chat]
-            ) {
-
+            if (warnings[chat]) {
               const possibleKeys = [
                 sender,
                 normalizeJid(
@@ -4863,109 +3238,67 @@ async function startBot() {
                 const key
                 of possibleKeys
               ) {
-
                 if (
                   key &&
                   warnings[chat][key]
                 ) {
-
-                  delete warnings[chat][
-                    key
-                  ];
+                  delete warnings[chat][key];
 
                   warningCleared =
                     true;
-
                 }
-
               }
-
-              /*
-              Phone mapping.
-              */
 
               const phone =
                 getPhoneFromAnyId(
                   sender
                 );
 
-              if (
-                phone
-              ) {
-
+              if (phone) {
                 const phoneKey =
                   `${phone}@s.whatsapp.net`;
 
                 if (
-                  warnings[chat][
-                    phoneKey
-                  ]
+                  warnings[chat][phoneKey]
                 ) {
-
-                  delete warnings[chat][
-                    phoneKey
-                  ];
+                  delete warnings[chat][phoneKey];
 
                   warningCleared =
                     true;
-
                 }
-
               }
 
               if (
                 warningCleared
               ) {
-
                 console.log(
-                  "✅ MEMBER BECAME ACTIVE - WARNING CLEARED:",
+                  "✅ MEMBER ACTIVE - WARNING CLEARED:",
                   sender
                 );
 
-                changed =
-                  true;
-
+                changed = true;
               }
-
             }
 
-            changed =
-              true;
+            changed = true;
 
             console.log(
-              `💬 MESSAGE SAVED: ${chat} | ${sender}`
+              `💬 MESSAGE SAVED: ${chat}`
             );
-
           }
 
-          /*
-          =================================
-          SAVE
-          =================================
-          */
-
-          if (
-            changed
-          ) {
-
+          if (changed) {
             await saveData();
-
           }
-
         } catch (error) {
-
           console.log(
             "❌ MESSAGE ERROR:",
             error.message
           );
-
         }
-
       }
     );
-
   } catch (error) {
-
     console.log(
       "❌ START ERROR:",
       error.message
@@ -4977,85 +3310,79 @@ async function startBot() {
     connectionStatus =
       "error";
 
-    reconnecting =
-      false;
+    reconnecting = false;
 
     setTimeout(
       startBot,
       5000
     );
-
   }
-
 }
 
 /*
-========================================================
-QR EXPIRATION
-========================================================
+==================================================
+QR EXPIRY
+==================================================
 */
 
 setInterval(
   () => {
-
     if (
       latestQR &&
       Date.now() -
         qrGeneratedAt >
         QR_EXPIRE
     ) {
-
       console.log(
         "♻️ QR EXPIRED"
       );
 
-      latestQR =
-        null;
+      latestQR = null;
 
-      qrGeneratedAt =
-        0;
-
+      qrGeneratedAt = 0;
     }
-
   },
   10000
 );
 
 /*
-========================================================
+==================================================
 GROUP RESCAN
-========================================================
+==================================================
 */
 
 setInterval(
   async () => {
-
     if (
       sock &&
       ownerJid &&
       connectionStatus ===
         "connected"
     ) {
-
       await findTargetGroups();
-
     }
-
   },
   30000
 );
 
 /*
-========================================================
-7-DAY AUTOMATIC REPORT
-========================================================
+==================================================
+AUTOMATIC 7-DAY REPORT
+==================================================
+
+YAHAN processWarnings = TRUE HAI.
+
+Isliye automatic cycle:
+
+1. Group report
+2. 0 message walay ko private warning
+3. Already warned + again 0 = removal
+==================================================
 */
 
 setInterval(
   async () => {
-
     try {
-
       const end =
         Number(
           botState.cycleStart
@@ -5067,116 +3394,70 @@ setInterval(
           1000;
 
       if (
-        Date.now() <
-        end
+        Date.now() >= end
       ) {
+        if (
+          sock &&
+          ownerJid
+        ) {
+          console.log(
+            "⏰ 7 DAYS COMPLETE"
+          );
 
-        return;
+          /*
+          ----------------------------------------
+          AUTOMATIC PROCESS
+          ----------------------------------------
+          */
 
+          for (
+            const group
+            of savedGroups
+          ) {
+            await sendReport(
+              group.jid,
+              true
+            );
+          }
+
+          /*
+          ----------------------------------------
+          NEW CYCLE
+          ----------------------------------------
+          */
+
+          botState.cycleStart =
+            Date.now();
+
+          messageLog = {};
+
+          await saveData();
+
+          console.log(
+            "🔄 NEW 7-DAY CYCLE STARTED"
+          );
+        }
       }
-
-      if (
-        !sock ||
-        !ownerJid ||
-        connectionStatus !==
-          "connected"
-      ) {
-
-        console.log(
-          "⏰ 7 DAYS COMPLETE BUT WHATSAPP NOT CONNECTED."
-        );
-
-        return;
-
-      }
-
-      console.log(
-        "================================"
-      );
-
-      console.log(
-        "⏰ 7 DAYS COMPLETE"
-      );
-
-      console.log(
-        "📊 GENERATING REPORTS..."
-      );
-
-      /*
-      Report every target group.
-      */
-
-      for (
-        const group
-        of savedGroups
-      ) {
-
-        await sendReport(
-          group.jid
-        );
-
-      }
-
-      /*
-      ======================================
-      NEW CYCLE
-      ======================================
-      */
-
-      botState.cycleStart =
-        Date.now();
-
-      /*
-      New cycle starts with
-      zero message counts.
-
-      WARNING DATA IS NOT RESET.
-
-      This is IMPORTANT because warning
-      needs to survive into the next
-      cycle for second-zero removal.
-      */
-
-      messageLog = {};
-
-      await saveData();
-
-      console.log(
-        "🔄 NEW 7-DAY CYCLE STARTED"
-      );
-
-      console.log(
-        "⚠️ WARNING DATA PRESERVED"
-      );
-
-      console.log(
-        "================================"
-      );
-
     } catch (error) {
-
       console.log(
         "❌ AUTO REPORT ERROR:",
         error.message
       );
-
     }
-
   },
   60000
 );
 
 /*
-========================================================
+==================================================
 SERVER
-========================================================
+==================================================
 */
 
 app.listen(
   PORT,
   "0.0.0.0",
   () => {
-
     console.log(
       "================================"
     );
@@ -5199,19 +3480,15 @@ app.listen(
     );
 
     console.log(
-      "⚡ !RANA: ON"
+      "📊 !RANA: REPORT ONLY"
     );
 
     console.log(
-      "📈 !STATS: ON"
+      "📊 !STATS: REPORT ONLY"
     );
 
     console.log(
-      "📋 !GROUPS: ON"
-    );
-
-    console.log(
-      "⏰ 7-DAY REPORT: ON"
+      "⏰ 7-DAY AUTO REPORT: ON"
     );
 
     console.log(
@@ -5223,10 +3500,6 @@ app.listen(
     );
 
     console.log(
-      "🛡️ ADMIN PROTECTION: ON"
-    );
-
-    console.log(
       "🌐 PORT:",
       PORT
     );
@@ -5234,40 +3507,21 @@ app.listen(
     console.log(
       "================================"
     );
-
   }
 );
 
 /*
-========================================================
+==================================================
 BOOT
-========================================================
+==================================================
 */
 
 (async () => {
-
   console.log(
     "🚀 Starting WhatsApp Bot..."
   );
 
   await loadCloudData();
 
-  /*
-  If cloud/local data has no cycle,
-  start one now.
-  */
-
-  if (
-    !botState.cycleStart
-  ) {
-
-    botState.cycleStart =
-      Date.now();
-
-    await saveData();
-
-  }
-
   startBot();
-
 })();

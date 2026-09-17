@@ -20,6 +20,7 @@ CONFIG
 */
 
 const PORT = process.env.PORT || 3000;
+
 const REPORT_DAYS = 7;
 
 const TARGET_GROUP_NAMES = [
@@ -148,6 +149,12 @@ const LID_MAP_FILE =
     "lidMap.json"
   );
 
+const WARNING_FILE =
+  path.join(
+    DATA_DIR,
+    "warnings.json"
+  );
+
 let botState =
   loadJSON(
     STATE_FILE,
@@ -177,15 +184,32 @@ let lidMap =
 
 /*
 ========================================
-MESSAGE LOG
+WARNING DATA
 ========================================
 
-IMPORTANT:
+Structure:
 
-Messages are stored in Supabase
-when available.
+warnings[groupJid][memberJid] = {
+  warnedAt: timestamp
+}
 
-Local data is only fallback/cache.
+If member sends a message during the
+next cycle, warning is removed.
+
+If still 0 at next report:
+member will be removed.
+========================================
+*/
+
+let warnings =
+  loadJSON(
+    WARNING_FILE,
+    {}
+  );
+
+/*
+========================================
+MESSAGE LOG
 ========================================
 */
 
@@ -271,6 +295,16 @@ async function loadCloudData() {
       ) {
 
         lidMap =
+          row.value || {};
+
+      }
+
+      if (
+        row.key ===
+        "warnings"
+      ) {
+
+        warnings =
           row.value || {};
 
       }
@@ -361,6 +395,11 @@ async function saveAllCloud() {
     lidMap
   );
 
+  await saveCloud(
+    "warnings",
+    warnings
+  );
+
 }
 
 /*
@@ -391,6 +430,11 @@ async function saveData() {
     lidMap
   );
 
+  saveJSON(
+    WARNING_FILE,
+    warnings
+  );
+
   await saveCloud(
     "messageLog",
     messageLog
@@ -414,6 +458,11 @@ async function saveData() {
   await saveCloud(
     "lidMap",
     lidMap
+  );
+
+  await saveCloud(
+    "warnings",
+    warnings
   );
 
 }
@@ -637,6 +686,62 @@ function getMemberNumber(
 
 /*
 ========================================
+PRIVATE JID
+========================================
+
+Warning personal chat mein bhejne
+ke liye phone JID chahiye.
+========================================
+*/
+
+function getPrivateJid(
+  participant
+) {
+
+  const candidates = [
+    participant?.phoneNumber,
+    participant?.id,
+    participant?.lid
+  ];
+
+  for (
+    const id of candidates
+  ) {
+
+    const n =
+      normalizeJid(id);
+
+    if (
+      isPhoneJid(n)
+    ) {
+
+      return n;
+
+    }
+
+  }
+
+  for (
+    const id of candidates
+  ) {
+
+    const phone =
+      getPhoneFromAnyId(id);
+
+    if (phone) {
+
+      return `${phone}@s.whatsapp.net`;
+
+    }
+
+  }
+
+  return null;
+
+}
+
+/*
+========================================
 GROUP MATCH
 ========================================
 */
@@ -838,7 +943,7 @@ function isTargetGroup(jid) {
 
 /*
 ========================================
-MEMBER COUNT
+MEMBER MESSAGE COUNT
 ========================================
 */
 
@@ -940,6 +1045,250 @@ function getMessagesForMember(
   return [
     ...new Set(result)
   ];
+
+}
+
+/*
+========================================
+WARNING MESSAGE
+========================================
+*/
+
+async function sendPrivateWarning(
+  groupJid,
+  groupName,
+  participant
+) {
+
+  try {
+
+    const privateJid =
+      getPrivateJid(
+        participant
+      );
+
+    if (!privateJid) {
+
+      console.log(
+        "⚠️ WARNING SKIPPED - NO PHONE:",
+        participant?.id ||
+        participant?.lid
+      );
+
+      return false;
+
+    }
+
+    /*
+    Do not warn bot/owner
+    */
+
+    if (
+      ownerJid &&
+      normalizeJid(
+        privateJid
+      ) ===
+      normalizeJid(
+        ownerJid
+      )
+    ) {
+
+      return false;
+
+    }
+
+    const number =
+      getMemberNumber(
+        participant
+      );
+
+    const text =
+`⚠️ *7-DAY ACTIVITY WARNING*
+
+Assalam o Alaikum 👋
+
+Aap ne group:
+
+*${groupName}*
+
+mein pichlay 7 din mein *koi message nahi kiya*.
+
+📊 Aap ke messages: *0*
+
+⚠️ Agar aglay 7 din ke period mein bhi aap ne group mein message nahi kiya to aapko group se *remove kar diya jayega*.
+
+Please group mein kam az kam ek message kar dein taake aap active count ho jayen.
+
+👤 Number: *${number}*
+
+— WhatsApp Report Bot`;
+
+    await sock.sendMessage(
+      privateJid,
+      {
+        text
+      }
+    );
+
+    console.log(
+      "⚠️ PRIVATE WARNING SENT:",
+      number,
+      "FROM:",
+      groupName
+    );
+
+    return true;
+
+  } catch (error) {
+
+    console.log(
+      "❌ PRIVATE WARNING ERROR:",
+      error.message
+    );
+
+    return false;
+
+  }
+
+}
+
+/*
+========================================
+REMOVE MEMBER
+========================================
+*/
+
+async function removeMember(
+  groupJid,
+  groupName,
+  participant
+) {
+
+  try {
+
+    const memberJid =
+      normalizeJid(
+        participant?.id ||
+        ""
+      );
+
+    const phoneJid =
+      getPrivateJid(
+        participant
+      );
+
+    /*
+    Prefer actual group participant ID.
+    */
+
+    const target =
+      memberJid ||
+      phoneJid;
+
+    if (!target) {
+
+      console.log(
+        "❌ REMOVE SKIPPED - NO JID"
+      );
+
+      return false;
+
+    }
+
+    /*
+    Never remove bot itself.
+    */
+
+    if (
+      ownerJid &&
+      normalizeJid(target) ===
+      normalizeJid(ownerJid)
+    ) {
+
+      return false;
+
+    }
+
+    /*
+    Never remove group creator/admin
+    if role is known.
+    */
+
+    if (
+      participant?.admin ===
+      "admin" ||
+      participant?.admin ===
+      "superadmin"
+    ) {
+
+      console.log(
+        "⚠️ REMOVE SKIPPED - ADMIN:",
+        target
+      );
+
+      return false;
+
+    }
+
+    await sock.groupParticipantsUpdate(
+      groupJid,
+      [target],
+      "remove"
+    );
+
+    console.log(
+      "🚫 MEMBER REMOVED:",
+      getMemberNumber(
+        participant
+      ),
+      "FROM:",
+      groupName
+    );
+
+    /*
+    Send removal notice privately
+    */
+
+    const privateJid =
+      getPrivateJid(
+        participant
+      );
+
+    if (privateJid) {
+
+      try {
+
+        await sock.sendMessage(
+          privateJid,
+          {
+            text:
+`🚫 *GROUP REMOVAL NOTICE*
+
+Aap ko *${groupName}* se remove kar diya gaya hai.
+
+Reason:
+Pichlay 2 consecutive 7-day periods mein aap ke messages *0* rahe.
+
+Agar aapko lagta hai ke ye action ghalat hua hai to group admin se rabta karein.`
+          }
+        );
+
+      } catch {}
+
+    }
+
+    return true;
+
+  } catch (error) {
+
+    console.log(
+      "❌ REMOVE ERROR:",
+      error.message
+    );
+
+    return false;
+
+  }
 
 }
 
@@ -1145,6 +1494,12 @@ async function sendReport(
     text +=
       "━━━━━━━━━━━━━━━━━━━━";
 
+    /*
+    ========================================
+    GROUP REPORT ONLY
+    ========================================
+    */
+
     await sock.sendMessage(
       groupJid,
       {
@@ -1152,9 +1507,274 @@ async function sendReport(
       }
     );
 
+    /*
+    ========================================
+    PRIVATE WARNINGS / REMOVALS
+    ========================================
+    */
+
+    if (!warnings[groupJid]) {
+      warnings[groupJid] = {};
+    }
+
+    /*
+    Active members:
+    remove their previous warning because
+    they became active.
+    */
+
+    for (
+      const participant
+      of meta.participants || []
+    ) {
+
+      const ids = [
+        participant?.id,
+        participant?.lid,
+        participant?.phoneNumber
+      ];
+
+      let warningKey = null;
+
+      for (
+        const id of ids
+      ) {
+
+        const n =
+          normalizeJid(id);
+
+        if (
+          n &&
+          warnings[groupJid][n]
+        ) {
+
+          warningKey = n;
+          break;
+
+        }
+
+      }
+
+      const times =
+        getMessagesForMember(
+          groupData,
+          participant
+        );
+
+      const count =
+        times.length;
+
+      if (count > 0) {
+
+        /*
+        User became active.
+        Clear old warning.
+        */
+
+        if (warningKey) {
+
+          delete warnings[groupJid][warningKey];
+
+          console.log(
+            "✅ WARNING CLEARED - MEMBER ACTIVE:",
+            getMemberNumber(
+              participant
+            )
+          );
+
+        }
+
+      }
+
+    }
+
+    /*
+    ========================================
+    PROCESS ZERO MEMBERS
+    ========================================
+    */
+
+    for (
+      const participant
+      of meta.participants || []
+    ) {
+
+      const times =
+        getMessagesForMember(
+          groupData,
+          participant
+        );
+
+      const count =
+        times.length;
+
+      if (count !== 0) {
+        continue;
+      }
+
+      /*
+      Skip bot/owner.
+      */
+
+      const privateJid =
+        getPrivateJid(
+          participant
+        );
+
+      if (
+        ownerJid &&
+        privateJid &&
+        normalizeJid(
+          privateJid
+        ) ===
+        normalizeJid(
+          ownerJid
+        )
+      ) {
+
+        continue;
+
+      }
+
+      /*
+      Find existing warning.
+      */
+
+      let existingWarning =
+        null;
+
+      const possibleKeys = [
+        participant?.id,
+        participant?.lid,
+        participant?.phoneNumber,
+        privateJid
+      ];
+
+      for (
+        const id
+        of possibleKeys
+      ) {
+
+        const n =
+          normalizeJid(id);
+
+        if (
+          n &&
+          warnings[groupJid][n]
+        ) {
+
+          existingWarning =
+            warnings[groupJid][n];
+
+          break;
+
+        }
+
+      }
+
+      /*
+      ======================================
+      FIRST ZERO PERIOD
+      ======================================
+      */
+
+      if (!existingWarning) {
+
+        const sent =
+          await sendPrivateWarning(
+            groupJid,
+            meta.subject,
+            participant
+          );
+
+        if (sent) {
+
+          const key =
+            normalizeJid(
+              privateJid ||
+              participant?.id ||
+              participant?.lid
+            );
+
+          if (key) {
+
+            warnings[groupJid][key] = {
+              warnedAt:
+                Date.now()
+            };
+
+          }
+
+        }
+
+      }
+
+      /*
+      ======================================
+      SECOND CONSECUTIVE ZERO PERIOD
+      ======================================
+
+      User was already warned last cycle
+      and again has 0 messages.
+      */
+
+      else {
+
+        console.log(
+          "🚫 SECOND ZERO PERIOD:",
+          getMemberNumber(
+            participant
+          )
+        );
+
+        await removeMember(
+          groupJid,
+          meta.subject,
+          participant
+        );
+
+        /*
+        Remove warning record.
+        */
+
+        const possibleKeys2 = [
+          participant?.id,
+          participant?.lid,
+          participant?.phoneNumber,
+          privateJid
+        ];
+
+        for (
+          const id
+          of possibleKeys2
+        ) {
+
+          const n =
+            normalizeJid(id);
+
+          if (
+            n &&
+            warnings[groupJid][n]
+          ) {
+
+            delete warnings[groupJid][n];
+
+          }
+
+        }
+
+      }
+
+    }
+
     await saveCloud(
       "lidMap",
       lidMap
+    );
+
+    await saveCloud(
+      "warnings",
+      warnings
     );
 
     console.log(
@@ -2633,6 +3253,11 @@ h1 {
     ☁️ Message counting data Supabase mein
     save hoga, isliye Render restart/sleep ke
     baad cycle zero se start nahi hogi.
+    <br><br>
+    ⚠️ 0 messages walay members ko private
+    warning milegi. Do consecutive 7-day
+    periods mein 0 rehne par removal attempt
+    hoga.
   </div>
 
 </div>
@@ -2741,10 +3366,11 @@ h1 {
 
   WhatsApp Report Bot
   • BAMB Dashboard
-  • Cloud Storage
   • !rana
   • !stats
   • !groups
+  • Private Warnings
+  • Auto Removal
 
 </div>
 
@@ -2757,6 +3383,47 @@ h1 {
 
   }
 );
+
+/*
+========================================
+DURATION
+========================================
+*/
+
+function formatDuration(
+  ms
+) {
+
+  const totalSeconds =
+    Math.floor(
+      ms / 1000
+    );
+
+  const days =
+    Math.floor(
+      totalSeconds /
+      86400
+    );
+
+  const hours =
+    Math.floor(
+      (
+        totalSeconds %
+        86400
+      ) / 3600
+    );
+
+  const minutes =
+    Math.floor(
+      (
+        totalSeconds %
+        3600
+      ) / 60
+    );
+
+  return `${days}d ${hours}h ${minutes}m`;
+
+}
 
 /*
 ========================================
@@ -2823,6 +3490,21 @@ app.get(
           lidMap
         ).length,
 
+      warnings:
+        Object.values(
+          warnings
+        ).reduce(
+          (
+            total,
+            group
+          ) =>
+            total +
+            Object.keys(
+              group || {}
+            ).length,
+          0
+        ),
+
       lastError:
         lastError || null
 
@@ -2850,16 +3532,6 @@ async function startBot() {
 
     connectionStatus =
       "connecting";
-
-    /*
-    IMPORTANT:
-
-    Auth is stored in local auth folder.
-
-    Later we will move/persist auth
-    through a proper cloud solution so
-    Render redeploy does not require QR.
-    */
 
     const {
       state,
@@ -2924,7 +3596,9 @@ async function startBot() {
     );
 
     /*
+    ========================================
     CONNECTION
+    ========================================
     */
 
     sock.ev.on(
@@ -2997,6 +3671,14 @@ async function startBot() {
           console.log(
             "☁️ CLOUD:",
             !!supabase
+          );
+
+          console.log(
+            "⚠️ PRIVATE WARNINGS: ON"
+          );
+
+          console.log(
+            "🚫 AUTO REMOVAL: ON"
           );
 
           console.log(
@@ -3143,6 +3825,12 @@ async function startBot() {
 
             }
 
+            /*
+            =================================
+            TEXT
+            =================================
+            */
+
             const text =
               msg.message
                 .conversation ||
@@ -3163,7 +3851,9 @@ async function startBot() {
                 .toLowerCase();
 
             /*
+            =================================
             OWNER
+            =================================
             */
 
             const ownerNormalized =
@@ -3190,7 +3880,9 @@ async function startBot() {
               );
 
             /*
+            =================================
             !RANA
+            =================================
             */
 
             if (
@@ -3216,7 +3908,9 @@ async function startBot() {
             }
 
             /*
+            =================================
             !STATS
+            =================================
             */
 
             if (
@@ -3242,7 +3936,9 @@ async function startBot() {
             }
 
             /*
+            =================================
             !GROUPS
+            =================================
             */
 
             if (
@@ -3263,7 +3959,9 @@ async function startBot() {
             }
 
             /*
-            Ignore own normal messages
+            =================================
+            IGNORE OWN NORMAL MESSAGE
+            =================================
             */
 
             if (
@@ -3275,7 +3973,9 @@ async function startBot() {
             }
 
             /*
-            Target only
+            =================================
+            TARGET ONLY
+            =================================
             */
 
             if (
@@ -3302,6 +4002,12 @@ async function startBot() {
             if (!sender) {
               continue;
             }
+
+            /*
+            =================================
+            MESSAGE STORAGE
+            =================================
+            */
 
             if (
               !messageLog[chat]
@@ -3333,6 +4039,94 @@ async function startBot() {
                 Date.now()
               );
 
+            /*
+            =================================
+            IMPORTANT:
+            If user was previously warned,
+            clear warning immediately when
+            they send a message.
+            =================================
+            */
+
+            if (
+              warnings[chat]
+            ) {
+
+              const possibleKeys = [
+                sender,
+                normalizeJid(
+                  senderLid
+                ),
+                normalizeJid(
+                  senderPhone
+                )
+              ];
+
+              let warningCleared =
+                false;
+
+              for (
+                const key
+                of possibleKeys
+              ) {
+
+                if (
+                  key &&
+                  warnings[chat][key]
+                ) {
+
+                  delete warnings[chat][key];
+
+                  warningCleared =
+                    true;
+
+                }
+
+              }
+
+              /*
+              Also check phone mapping.
+              */
+
+              const phone =
+                getPhoneFromAnyId(
+                  sender
+                );
+
+              if (phone) {
+
+                const phoneKey =
+                  `${phone}@s.whatsapp.net`;
+
+                if (
+                  warnings[chat][phoneKey]
+                ) {
+
+                  delete warnings[chat][phoneKey];
+
+                  warningCleared =
+                    true;
+
+                }
+
+              }
+
+              if (
+                warningCleared
+              ) {
+
+                console.log(
+                  "✅ MEMBER BECAME ACTIVE - WARNING CLEARED:",
+                  sender
+                );
+
+                changed =
+                  true;
+
+              }
+
+            }
+
             changed =
               true;
 
@@ -3343,7 +4137,9 @@ async function startBot() {
           }
 
           /*
-          Save once after processing
+          =================================
+          SAVE
+          =================================
           */
 
           if (changed) {
@@ -3480,6 +4276,12 @@ setInterval(
             "⏰ 7 DAYS COMPLETE"
           );
 
+          /*
+          Send report to every target group.
+          This also sends private warnings and
+          handles second-cycle removals.
+          */
+
           for (
             const group
             of savedGroups
@@ -3490,6 +4292,12 @@ setInterval(
             );
 
           }
+
+          /*
+          ======================================
+          NEW 7-DAY CYCLE
+          ======================================
+          */
 
           botState.cycleStart =
             Date.now();
@@ -3561,6 +4369,14 @@ app.listen(
 
     console.log(
       "⏰ 7-DAY REPORT: ON"
+    );
+
+    console.log(
+      "⚠️ PRIVATE WARNING: ON"
+    );
+
+    console.log(
+      "🚫 AUTO REMOVAL: ON"
     );
 
     console.log(

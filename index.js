@@ -37,8 +37,6 @@ const REPORT_DAYS = 5;
 
 /*
 Removal ke darmiyan chhota delay.
-Iska maqsad ek hi second mein multiple
-actions fire na karna hai.
 */
 
 const REMOVE_DELAY_MS = 2500;
@@ -174,8 +172,8 @@ const LID_MAP_FILE =
   );
 
 /*
-Old warning file intentionally kept only
-for compatibility with old installations.
+Old warning file intentionally kept
+for compatibility.
 
 WARNING SYSTEM IS NOT USED.
 */
@@ -221,7 +219,6 @@ let lidMap =
 
 /*
 WARNING DATA IS NOT USED.
-Always empty.
 */
 
 let warnings = {};
@@ -306,7 +303,7 @@ async function loadCloudData() {
 
     /*
     Warning system OFF.
-    Ignore any old warning data.
+    Old warning data ignored.
     */
 
     warnings = {};
@@ -318,11 +315,14 @@ async function loadCloudData() {
     console.log(
       "⚠️ Warning system: OFF"
     );
+
   } catch (error) {
+
     console.log(
       "❌ Supabase load error:",
       error.message
     );
+
   }
 }
 
@@ -341,6 +341,7 @@ async function saveCloud(
   }
 
   try {
+
     const {
       error
     } =
@@ -362,15 +363,19 @@ async function saveCloud(
     if (error) {
       throw error;
     }
+
   } catch (error) {
+
     console.log(
       `❌ Cloud save error (${key}):`,
       error.message
     );
+
   }
 }
 
 async function saveData() {
+
   saveJSON(
     STATE_FILE,
     botState
@@ -390,10 +395,6 @@ async function saveData() {
     LID_MAP_FILE,
     lidMap
   );
-
-  /*
-  Warning file cleared.
-  */
 
   warnings = {};
 
@@ -427,11 +428,6 @@ async function saveData() {
     lidMap
   );
 
-  /*
-  Make sure old warning data
-  is not retained.
-  */
-
   await saveCloud(
     "warnings",
     {}
@@ -464,6 +460,7 @@ function isPhoneJid(jid) {
 }
 
 function phoneNumberFromJid(jid) {
+
   const n =
     normalizeJid(jid);
 
@@ -482,6 +479,7 @@ function phoneNumberFromJid(jid) {
 }
 
 function formatNumber(jid) {
+
   const n =
     normalizeJid(jid);
 
@@ -527,6 +525,7 @@ function rememberIdentity(
   lid,
   phone
 ) {
+
   const l =
     normalizeJid(lid);
 
@@ -546,7 +545,9 @@ function rememberIdentity(
   }
 
   if (lidMap[l] !== p) {
+
     lidMap[l] = p;
+
     return true;
   }
 
@@ -554,6 +555,7 @@ function rememberIdentity(
 }
 
 function getPhoneFromAnyId(id) {
+
   const n =
     normalizeJid(id);
 
@@ -582,6 +584,7 @@ function getPhoneFromAnyId(id) {
 function getMemberNumber(
   participant
 ) {
+
   const candidates = [
     participant?.phoneNumber,
     participant?.id,
@@ -592,10 +595,13 @@ function getMemberNumber(
     const id
     of candidates
   ) {
+
     if (
       isPhoneJid(id)
     ) {
+
       return `+${formatNumber(id)}`;
+
     }
   }
 
@@ -603,6 +609,7 @@ function getMemberNumber(
     const id
     of candidates
   ) {
+
     const phone =
       getPhoneFromAnyId(
         id
@@ -623,6 +630,7 @@ function getMemberNumber(
 function getPrivateJid(
   participant
 ) {
+
   const candidates = [
     participant?.phoneNumber,
     participant?.id,
@@ -633,13 +641,16 @@ function getPrivateJid(
     const id
     of candidates
   ) {
+
     const n =
       normalizeJid(id);
 
     if (
       isPhoneJid(n)
     ) {
+
       return n;
+
     }
   }
 
@@ -647,13 +658,16 @@ function getPrivateJid(
     const id
     of candidates
   ) {
+
     const phone =
       getPhoneFromAnyId(
         id
       );
 
     if (phone) {
+
       return `${phone}@s.whatsapp.net`;
+
     }
   }
 
@@ -669,6 +683,7 @@ GROUP MATCHING
 function normalizeGroupName(
   name
 ) {
+
   return String(name || "")
     .normalize("NFKC")
     .toLowerCase()
@@ -681,12 +696,14 @@ function normalizeGroupName(
       " "
     )
     .trim();
+
 }
 
 function groupMatches(
   actualName,
   targetName
 ) {
+
   const actual =
     normalizeGroupName(
       actualName
@@ -743,6 +760,7 @@ HTML ESCAPE
 */
 
 function escapeHTML(text) {
+
   return String(text || "")
     .replace(
       /&/g,
@@ -764,6 +782,7 @@ function escapeHTML(text) {
       /'/g,
       "&#039;"
     );
+
 }
 
 /*
@@ -814,10 +833,12 @@ TARGET GROUP
 function isTargetGroup(
   jid
 ) {
+
   return savedGroups.some(
     group =>
       group.jid === jid
   );
+
 }
 
 /*
@@ -829,6 +850,7 @@ GROUP MESSAGE COUNT
 function getGroupMessageCount(
   groupJid
 ) {
+
   const data =
     messageLog[groupJid] ||
     {};
@@ -839,13 +861,16 @@ function getGroupMessageCount(
     const sender
     of Object.keys(data)
   ) {
+
     if (
       Array.isArray(
         data[sender]
       )
     ) {
+
       total +=
         data[sender].length;
+
     }
   }
 
@@ -862,6 +887,7 @@ function getMessagesForMember(
   groupData,
   participant
 ) {
+
   const candidates =
     new Set();
 
@@ -875,6 +901,7 @@ function getMessagesForMember(
     const id
     of ids
   ) {
+
     const n =
       normalizeJid(id);
 
@@ -888,11 +915,13 @@ function getMessagesForMember(
       isLid(n) &&
       lidMap[n]
     ) {
+
       candidates.add(
         normalizeJid(
           lidMap[n]
         )
       );
+
     }
   }
 
@@ -902,10 +931,12 @@ function getMessagesForMember(
       lidMap
     )
   ) {
+
     for (
       const id
       of ids
     ) {
+
       const n =
         normalizeJid(id);
 
@@ -914,9 +945,11 @@ function getMessagesForMember(
         normalizeJid(phone) ===
           n
       ) {
+
         candidates.add(
           normalizeJid(lid)
         );
+
       }
     }
   }
@@ -927,15 +960,18 @@ function getMessagesForMember(
     const key
     of candidates
   ) {
+
     if (
       Array.isArray(
         groupData[key]
       )
     ) {
+
       result =
         result.concat(
           groupData[key]
         );
+
     }
   }
 
@@ -951,6 +987,7 @@ DELAY HELPER
 */
 
 function sleep(ms) {
+
   return new Promise(
     resolve =>
       setTimeout(
@@ -958,13 +995,14 @@ function sleep(ms) {
         ms
       )
   );
+
 }
 
 /*
 ==================================================
 REMOVE MEMBER
 ==================================================
-IMPORTANT:
+
 NO WARNING
 NO PRIVATE MESSAGE
 ==================================================
@@ -975,7 +1013,9 @@ async function removeMember(
   groupName,
   participant
 ) {
+
   try {
+
     const memberJid =
       normalizeJid(
         participant?.id ||
@@ -992,6 +1032,7 @@ async function removeMember(
       phoneJid;
 
     if (!target) {
+
       console.log(
         "❌ REMOVE SKIPPED - NO JID"
       );
@@ -1000,7 +1041,7 @@ async function removeMember(
     }
 
     /*
-    Never remove bot/owner.
+    Never remove owner.
     */
 
     if (
@@ -1012,6 +1053,7 @@ async function removeMember(
           ownerJid
         )
     ) {
+
       console.log(
         "🛡️ OWNER SKIPPED:",
         target
@@ -1030,6 +1072,7 @@ async function removeMember(
       participant?.admin ===
         "superadmin"
     ) {
+
       console.log(
         "🛡️ ADMIN SKIPPED:",
         target
@@ -1058,13 +1101,16 @@ async function removeMember(
     */
 
     return true;
+
   } catch (error) {
+
     console.log(
       "❌ REMOVE ERROR:",
       error.message
     );
 
     return false;
+
   }
 }
 
@@ -1073,19 +1119,23 @@ async function removeMember(
 REPORT
 ==================================================
 
-processWarnings parameter intentionally ignored.
-There is NO warning system anymore.
+shouldRemove = false
+    !rana / !stats
+    REPORT ONLY
 
-Every automatic cycle:
-1. Report
-2. Remove members with exactly 0 messages
+shouldRemove = true
+    Automatic 5-day cycle
+    REPORT + ZERO MESSAGE REMOVAL
 ==================================================
 */
 
 async function sendReport(
-  groupJid
+  groupJid,
+  shouldRemove = false
 ) {
+
   try {
+
     const meta =
       await sock.groupMetadata(
         groupJid
@@ -1112,24 +1162,29 @@ async function sendReport(
       of meta.participants ||
       []
     ) {
+
       if (
         participant.id &&
         participant.phoneNumber
       ) {
+
         rememberIdentity(
           participant.id,
           participant.phoneNumber
         );
+
       }
 
       if (
         participant.lid &&
         participant.phoneNumber
       ) {
+
         rememberIdentity(
           participant.lid,
           participant.phoneNumber
         );
+
       }
 
       const times =
@@ -1147,6 +1202,7 @@ async function sendReport(
         );
 
       if (count > 0) {
+
         active.push({
           number,
           count
@@ -1154,12 +1210,15 @@ async function sendReport(
 
         totalMessages +=
           count;
+
       } else {
+
         inactive.push({
           number,
           count: 0,
           participant
         });
+
       }
     }
 
@@ -1214,15 +1273,19 @@ async function sendReport(
     if (
       !active.length
     ) {
+
       text +=
         "😅 Kisi ne message nahi kiya.\n\n";
+
     } else {
+
       let i = 1;
 
       for (
         const user
         of active
       ) {
+
         text +=
           `${i}. 📱 *${user.number}*\n`;
 
@@ -1230,6 +1293,7 @@ async function sendReport(
           `   💬 *${user.count} messages*\n\n`;
 
         i++;
+
       }
     }
 
@@ -1245,19 +1309,24 @@ async function sendReport(
     if (
       !inactive.length
     ) {
+
       text +=
         "🎉 Sab members active hain!\n";
+
     } else {
+
       let i = 1;
 
       for (
         const user
         of inactive
       ) {
+
         text +=
           `${i}. 📱 ${user.number} — *0 messages* 🚫\n`;
 
         i++;
+
       }
     }
 
@@ -1278,7 +1347,7 @@ async function sendReport(
 
     /*
     ----------------------------------------------
-    REPORT ALWAYS TO GROUP
+    REPORT ALWAYS SENT
     ----------------------------------------------
     */
 
@@ -1296,14 +1365,45 @@ async function sendReport(
 
     /*
     ==============================================
-    REMOVE ZERO-MESSAGE MEMBERS
+    IMPORTANT:
+    REPORT-ONLY COMMANDS MUST NEVER REMOVE.
+    
+    Only automatic cycle passes:
+        shouldRemove = true
     ==============================================
     */
+
+    if (!shouldRemove) {
+
+      console.log(
+        "📊 REPORT ONLY — NO MEMBERS REMOVED:",
+        meta.subject
+      );
+
+      await saveCloud(
+        "lidMap",
+        lidMap
+      );
+
+      return;
+    }
+
+    /*
+    ==============================================
+    AUTOMATIC ZERO-MESSAGE REMOVAL
+    ==============================================
+    */
+
+    console.log(
+      "🚫 AUTOMATIC REMOVAL ENABLED:",
+      meta.subject
+    );
 
     for (
       const user
       of inactive
     ) {
+
       const participant =
         user.participant;
 
@@ -1326,6 +1426,7 @@ async function sendReport(
             ownerJid
           )
       ) {
+
         console.log(
           "🛡️ OWNER NOT REMOVED:",
           user.number
@@ -1344,6 +1445,7 @@ async function sendReport(
         participant?.admin ===
           "superadmin"
       ) {
+
         console.log(
           "🛡️ ADMIN NOT REMOVED:",
           user.number
@@ -1366,6 +1468,7 @@ async function sendReport(
       */
 
       try {
+
         const latestMeta =
           await sock.groupMetadata(
             groupJid
@@ -1377,6 +1480,7 @@ async function sendReport(
             []
           ).find(
             p => {
+
               const a =
                 normalizeJid(
                   p.id
@@ -1404,10 +1508,12 @@ async function sendReport(
                     normalizeJid(bp)
                 )
               );
+
             }
           );
 
         if (!stillMember) {
+
           console.log(
             "ℹ️ ALREADY LEFT:",
             user.number
@@ -1421,11 +1527,14 @@ async function sendReport(
           meta.subject,
           stillMember
         );
+
       } catch (checkError) {
+
         console.log(
           "⚠️ MEMBER CHECK ERROR:",
           checkError.message
         );
+
       }
     }
 
@@ -1435,14 +1544,17 @@ async function sendReport(
     );
 
     console.log(
-      "✅ 5-DAY REPORT + ZERO-MESSAGE PROCESS COMPLETE:",
+      "✅ 5-DAY REPORT + ZERO-MESSAGE REMOVAL COMPLETE:",
       meta.subject
     );
+
   } catch (error) {
+
     console.log(
       "❌ REPORT ERROR:",
       error.message
     );
+
   }
 }
 
@@ -1453,11 +1565,13 @@ GROUP SCAN
 */
 
 async function findTargetGroups() {
+
   if (!sock) {
     return;
   }
 
   try {
+
     console.log(
       "🔍 Scanning groups..."
     );
@@ -1471,6 +1585,7 @@ async function findTargetGroups() {
       const jid
       of Object.keys(groups)
     ) {
+
       const group =
         groups[jid];
 
@@ -1507,6 +1622,7 @@ async function findTargetGroups() {
       const targetName
       of TARGET_GROUP_NAMES
     ) {
+
       const match =
         foundAll.find(
           group =>
@@ -1524,12 +1640,14 @@ async function findTargetGroups() {
             match.jid
         )
       ) {
+
         detected.push({
           jid: match.jid,
           name: match.name,
           target:
             targetName
         });
+
       }
     }
 
@@ -1560,7 +1678,9 @@ async function findTargetGroups() {
       "🎯 TARGET GROUPS:",
       savedGroups.length
     );
+
   } catch (error) {
+
     console.log(
       "❌ GROUP SCAN ERROR:",
       error.message
@@ -1568,6 +1688,7 @@ async function findTargetGroups() {
 
     lastError =
       error.message;
+
   }
 }
 
@@ -1580,6 +1701,7 @@ GROUP LIST
 async function sendGroupsList(
   chat
 ) {
+
   let text =
     "╭━━━━━━━━━━━━━━━━━━━━╮\n";
 
@@ -1592,14 +1714,18 @@ async function sendGroupsList(
   if (
     !allGroups.length
   ) {
+
     text +=
       "❌ Groups abhi detect nahi hue.";
+
   } else {
+
     allGroups.forEach(
       (
         group,
         index
       ) => {
+
         const target =
           savedGroups.some(
             g =>
@@ -1613,6 +1739,7 @@ async function sendGroupsList(
               ? "🎯"
               : "📁"
           } *${group.name}*\n`;
+
       }
     );
   }
@@ -1634,6 +1761,7 @@ DURATION
 function formatDuration(
   ms
 ) {
+
   const totalSeconds =
     Math.floor(
       ms / 1000
@@ -1674,15 +1802,20 @@ app.get(
     req,
     res
   ) => {
+
     let qrImage = "";
 
     if (latestQR) {
+
       try {
+
         qrImage =
           await QRCode.toDataURL(
             latestQR
           );
+
       } catch {}
+
     }
 
     const connected =
@@ -1741,18 +1874,23 @@ app.get(
         messageLog
       )
     ) {
+
       for (
         const arr
         of Object.values(
           group || {}
         )
       ) {
+
         if (
           Array.isArray(arr)
         ) {
+
           totalMessages +=
             arr.length;
+
         }
+
       }
     }
 
@@ -1763,24 +1901,29 @@ app.get(
       "yellow";
 
     if (connected) {
+
       statusText =
         "CONNECTED";
 
       statusClass =
         "green";
+
     } else if (
       connectionStatus ===
       "qr"
     ) {
+
       statusText =
         "SCAN QR";
 
       statusClass =
         "blue";
+
     } else if (
       connectionStatus ===
       "disconnected"
     ) {
+
       statusText =
         "RECONNECTING";
 
@@ -1861,6 +2004,7 @@ app.get(
         ? allGroups
             .map(
               group => {
+
                 const target =
                   savedGroups.some(
                     g =>
@@ -1895,6 +2039,7 @@ app.get(
 
 </div>
 `;
+
               }
             )
             .join("")
@@ -2057,10 +2202,6 @@ body {
   overflow-x: hidden;
 }
 
-/* =================================================
-   BACKGROUND GRID
-================================================= */
-
 body::before {
   content: "";
 
@@ -2094,10 +2235,6 @@ body::before {
     );
 }
 
-/* =================================================
-   CONTAINER
-================================================= */
-
 .container {
   width: 94%;
 
@@ -2110,10 +2247,6 @@ body::before {
   padding:
     28px 0 55px;
 }
-
-/* =================================================
-   HEADER
-================================================= */
 
 .header {
   position: relative;
@@ -2264,10 +2397,6 @@ h1 {
     uppercase;
 }
 
-/* =================================================
-   STATUS
-================================================= */
-
 .status {
   padding:
     11px 17px;
@@ -2321,10 +2450,6 @@ h1 {
   color:
     #ffd34e;
 }
-
-/* =================================================
-   STATS
-================================================= */
 
 .stats {
   display:
@@ -2439,10 +2564,6 @@ h1 {
     -.7px;
 }
 
-/* =================================================
-   MAIN GRID
-================================================= */
-
 .grid {
   display:
     grid;
@@ -2453,10 +2574,6 @@ h1 {
   gap:
     20px;
 }
-
-/* =================================================
-   CARD
-================================================= */
 
 .card {
   position:
@@ -2563,10 +2680,6 @@ h1 {
     1px;
 }
 
-/* =================================================
-   DEVICE
-================================================= */
-
 .device {
   padding:
     17px;
@@ -2632,10 +2745,6 @@ h1 {
     #00f5a0;
 }
 
-/* =================================================
-   NOTICE
-================================================= */
-
 .notice {
   margin-top:
     15px;
@@ -2667,10 +2776,6 @@ h1 {
   color:
     #dce8f7;
 }
-
-/* =================================================
-   QR
-================================================= */
 
 .qr-container {
   text-align:
@@ -2774,10 +2879,6 @@ h1 {
     1px;
 }
 
-/* =================================================
-   QR WAIT
-================================================= */
-
 .qr-wait {
   text-align:
     center;
@@ -2837,10 +2938,6 @@ h1 {
   font-size:
     9px;
 }
-
-/* =================================================
-   TARGET GROUP
-================================================= */
 
 .group-card {
   position:
@@ -3014,10 +3111,6 @@ h1 {
     rgba(0,245,160,.10);
 }
 
-/* =================================================
-   ALL GROUPS
-================================================= */
-
 .all-group {
   display:
     flex;
@@ -3113,10 +3206,6 @@ h1 {
     rgba(255,255,255,.035);
 }
 
-/* =================================================
-   PROGRESS
-================================================= */
-
 .progress-wrap {
   margin-top:
     10px;
@@ -3181,10 +3270,6 @@ h1 {
     rgba(0,245,160,.20);
 }
 
-/* =================================================
-   EMPTY
-================================================= */
-
 .empty-box {
   padding:
     30px;
@@ -3226,10 +3311,6 @@ h1 {
     9px;
 }
 
-/* =================================================
-   FOOTER
-================================================= */
-
 .footer {
   text-align:
     center;
@@ -3246,10 +3327,6 @@ h1 {
   padding-top:
     5px;
 }
-
-/* =================================================
-   RESPONSIVE
-================================================= */
 
 @media(max-width:900px) {
 
@@ -3348,8 +3425,6 @@ h1 {
 
 <div class="container">
 
-  <!-- HEADER -->
-
   <div class="header">
 
     <div class="brand">
@@ -3379,8 +3454,6 @@ h1 {
     </div>
 
   </div>
-
-  <!-- STATS -->
 
   <div class="stats">
 
@@ -3458,13 +3531,9 @@ h1 {
 
   </div>
 
-  <!-- MAIN -->
-
   <div class="grid">
 
     <div>
-
-      <!-- LINKED WHATSAPP -->
 
       <div class="card">
 
@@ -3577,8 +3646,6 @@ h1 {
 
       </div>
 
-      <!-- TARGET GROUPS -->
-
       <div class="card">
 
         <div class="card-title">
@@ -3601,8 +3668,6 @@ h1 {
 
     <div>
 
-      <!-- QR -->
-
       <div class="card">
 
         <div class="card-title">
@@ -3621,8 +3686,6 @@ h1 {
 
       </div>
 
-      <!-- ALL GROUPS -->
-
       <div class="card">
 
         <div class="card-title">
@@ -3640,8 +3703,6 @@ h1 {
         ${allGroupsHTML}
 
       </div>
-
-      <!-- CYCLE -->
 
       <div class="card">
 
@@ -3716,6 +3777,7 @@ app.get(
     req,
     res
   ) => {
+
     res.json({
 
       status:
@@ -3784,7 +3846,9 @@ app.get(
       lastError:
         lastError ||
         null
+
     });
+
   }
 );
 
@@ -3795,6 +3859,7 @@ START BOT
 */
 
 async function startBot() {
+
   if (reconnecting) {
     return;
   }
@@ -3802,6 +3867,7 @@ async function startBot() {
   reconnecting = true;
 
   try {
+
     connectionStatus =
       "connecting";
 
@@ -3897,6 +3963,7 @@ async function startBot() {
           console.log(
             "📱 NEW QR GENERATED"
           );
+
         }
 
         if (
@@ -3911,8 +3978,8 @@ async function startBot() {
             0;
 
           /*
-          NUMBER AUTOMATICALLY
-          FROM CONNECTED WHATSAPP.
+          Connected WhatsApp number
+          automatically detected.
           */
 
           ownerJid =
@@ -3969,6 +4036,7 @@ async function startBot() {
           );
 
           await findTargetGroups();
+
         }
 
         if (
@@ -3992,11 +4060,13 @@ async function startBot() {
             null;
 
           try {
+
             statusCode =
               lastDisconnect
                 ?.error
                 ?.output
                 ?.statusCode;
+
           } catch {}
 
           console.log(
@@ -4017,12 +4087,14 @@ async function startBot() {
             );
 
             return;
+
           }
 
           setTimeout(
             startBot,
             5000
           );
+
         }
 
       }
@@ -4092,8 +4164,10 @@ async function startBot() {
                 senderPhone
               )
             ) {
+
               changed =
                 true;
+
             }
 
             /*
@@ -4171,7 +4245,8 @@ async function startBot() {
               ) {
 
                 await sendReport(
-                  chat
+                  chat,
+                  false
                 );
 
               }
@@ -4199,7 +4274,8 @@ async function startBot() {
               ) {
 
                 await sendReport(
-                  chat
+                  chat,
+                  false
                 );
 
               }
@@ -4279,15 +4355,19 @@ async function startBot() {
             if (
               !messageLog[chat]
             ) {
+
               messageLog[chat] =
                 {};
+
             }
 
             if (
               !messageLog[chat][sender]
             ) {
+
               messageLog[chat][sender] =
                 [];
+
             }
 
             const timestamp =
@@ -4307,6 +4387,7 @@ async function startBot() {
             console.log(
               `💬 MESSAGE SAVED: ${chat}`
             );
+
           }
 
           if (changed) {
@@ -4345,6 +4426,7 @@ async function startBot() {
       startBot,
       5000
     );
+
   }
 }
 
@@ -4373,6 +4455,7 @@ setInterval(
 
       qrGeneratedAt =
         0;
+
     }
 
   },
@@ -4408,15 +4491,21 @@ setInterval(
 AUTOMATIC 5-DAY REPORT
 ==================================================
 
-5 din complete:
+5 din complete hone par:
 
 1. Report group mein send
 2. 0-message members identify
 3. Warning nahi
 4. Private message nahi
-5. Zero-message member ko remove attempt
-6. New 5-day cycle
-7. Message log reset
+5. Sirf 0-message members remove attempt
+6. 1+ message walon ko kuch nahi
+7. New 5-day cycle
+8. Message log reset
+
+IMPORTANT:
+!rana aur !stats yahan se alag hain.
+Woh sendReport(group, false) use karte hain.
+Automatic cycle sendReport(group, true) use karta hai.
 ==================================================
 */
 
@@ -4461,16 +4550,14 @@ setInterval(
           ) {
 
             await sendReport(
-              group.jid
+              group.jid,
+              true
             );
-
-            /*
-            Small pause between groups.
-            */
 
             await sleep(
               3000
             );
+
           }
 
           /*
@@ -4484,10 +4571,6 @@ setInterval(
 
           messageLog =
             {};
-
-          /*
-          Warning data permanently empty.
-          */
 
           warnings =
             {};

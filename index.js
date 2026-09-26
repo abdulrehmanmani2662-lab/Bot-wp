@@ -16,7 +16,7 @@ const { createClient } = require("@supabase/supabase-js");
 /*
 ==================================================
 WHATSAPP REPORT BOT
-PREMIUM 5-DAY ACTIVITY MONITOR
+PREMIUM 24-HOUR ACTIVITY MONITOR
 ==================================================
 */
 
@@ -30,10 +30,20 @@ const PORT = process.env.PORT || 3000;
 
 /*
 IMPORTANT:
-5 DAYS ONLY
+24 HOURS ONLY
+
+Jis member ne pichhle 24 ghanton
+mein koi message nahi kiya,
+automatic cycle par remove attempt hoga.
 */
 
-const REPORT_DAYS = 5;
+const REPORT_HOURS = 24;
+
+const REPORT_MS =
+  REPORT_HOURS *
+  60 *
+  60 *
+  1000;
 
 /*
 Removal ke darmiyan chhota delay.
@@ -1124,7 +1134,7 @@ shouldRemove = false
     REPORT ONLY
 
 shouldRemove = true
-    Automatic 5-day cycle
+    Automatic 24-hour cycle
     REPORT + ZERO MESSAGE REMOVAL
 ==================================================
 */
@@ -1238,7 +1248,7 @@ async function sendReport(
       "╭━━━━━━━━━━━━━━━━━━━━╮\n";
 
     text +=
-      "   📊 *5 DIN KI REPORT*\n";
+      "   📊 *24 HOURS KI REPORT*\n";
 
     text +=
       "╰━━━━━━━━━━━━━━━━━━━━╯\n\n";
@@ -1250,13 +1260,13 @@ async function sendReport(
       `🗓 *START:* ${
         new Date(
           botState.cycleStart
-        ).toLocaleDateString(
+        ).toLocaleString(
           "en-GB"
         )
       }\n`;
 
     text +=
-      `🗓 *PERIOD:* ${REPORT_DAYS} DAYS\n`;
+      `🗓 *PERIOD:* ${REPORT_HOURS} HOURS\n`;
 
     text +=
       `💬 *TOTAL MESSAGES:* ${totalMessages}\n\n`;
@@ -1301,7 +1311,7 @@ async function sendReport(
       "┏━━━━━━━━━━━━━━━━━━━━┓\n";
 
     text +=
-      "┃ 🔴 *0 MESSAGES*\n";
+      "┃ 🔴 *0 MESSAGES / 24H*\n";
 
     text +=
       "┗━━━━━━━━━━━━━━━━━━━━┛\n\n";
@@ -1337,7 +1347,7 @@ async function sendReport(
       `📈 *ACTIVE:* ${active.length}\n`;
 
     text +=
-      `📉 *0 MESSAGE:* ${inactive.length}\n`;
+      `📉 *0 MESSAGE / 24H:* ${inactive.length}\n`;
 
     text +=
       `💬 *TOTAL:* ${totalMessages}\n`;
@@ -1359,7 +1369,7 @@ async function sendReport(
     );
 
     console.log(
-      "📊 5-DAY REPORT SENT:",
+      "📊 24-HOUR REPORT SENT:",
       meta.subject
     );
 
@@ -1395,7 +1405,7 @@ async function sendReport(
     */
 
     console.log(
-      "🚫 AUTOMATIC REMOVAL ENABLED:",
+      "🚫 AUTOMATIC 24-HOUR REMOVAL ENABLED:",
       meta.subject
     );
 
@@ -1544,7 +1554,7 @@ async function sendReport(
     );
 
     console.log(
-      "✅ 5-DAY REPORT + ZERO-MESSAGE REMOVAL COMPLETE:",
+      "✅ 24-HOUR REPORT + ZERO-MESSAGE REMOVAL COMPLETE:",
       meta.subject
     );
 
@@ -1832,11 +1842,7 @@ app.get(
       );
 
     const totalTime =
-      REPORT_DAYS *
-      24 *
-      60 *
-      60 *
-      1000;
+      REPORT_MS;
 
     const progress =
       Math.min(
@@ -1848,22 +1854,21 @@ app.get(
         )
       );
 
-    const daysPassed =
+    const hoursPassed =
       Math.floor(
         elapsed /
           (
-            24 *
             60 *
             60 *
             1000
           )
       );
 
-    const daysLeft =
+    const hoursLeft =
       Math.max(
         0,
-        REPORT_DAYS -
-          daysPassed
+        REPORT_HOURS -
+          hoursPassed
       );
 
     let totalMessages = 0;
@@ -3440,7 +3445,7 @@ h1 {
         </h1>
 
         <p>
-          PREMIUM • CLOUD • 5-DAY MONITORING
+          PREMIUM • CLOUD • 24-HOUR MONITORING
         </p>
 
       </div>
@@ -3625,16 +3630,16 @@ h1 {
           <br><br>
 
           📊 <b>!rana / !stats</b>
-          = sirf 5-day report.
+          = sirf 24-hour report.
 
           <br><br>
 
-          🟢 5 din mein <b>1+ message</b>
+          🟢 24 ghanton mein <b>1+ message</b>
           = active.
 
           <br><br>
 
-          🔴 5 din mein <b>0 messages</b>
+          🔴 24 ghanton mein <b>0 messages</b>
           = automatic removal attempt.
 
           <br><br>
@@ -3709,11 +3714,11 @@ h1 {
         <div class="card-title">
 
           <h2>
-            📊 5-Day Activity Cycle
+            📊 24-Hour Activity Cycle
           </h2>
 
           <span>
-            ${daysLeft} DAYS LEFT
+            ${hoursLeft} HOURS LEFT
           </span>
 
         </div>
@@ -3727,7 +3732,7 @@ h1 {
             </span>
 
             <span>
-              ${daysLeft} days left
+              ${hoursLeft} hours left
             </span>
 
           </div>
@@ -3750,7 +3755,7 @@ h1 {
 
     WhatsApp Activity Monitor
     • PREMIUM DASHBOARD
-    • 5-DAY REPORT
+    • 24-HOUR REPORT
     • WARNING OFF
     • ZERO-MESSAGE AUTO REMOVAL
 
@@ -3800,8 +3805,8 @@ app.get(
       cloud:
         !!supabase,
 
-      reportDays:
-        REPORT_DAYS,
+      reportHours:
+        REPORT_HOURS,
 
       warnings:
         "OFF",
@@ -4018,7 +4023,7 @@ async function startBot() {
 
           console.log(
             "📊 REPORT:",
-            `${REPORT_DAYS} DAYS`
+            `${REPORT_HOURS} HOURS`
           );
 
           console.log(
@@ -4488,10 +4493,10 @@ setInterval(
 
 /*
 ==================================================
-AUTOMATIC 5-DAY REPORT
+AUTOMATIC 24-HOUR REPORT
 ==================================================
 
-5 din complete hone par:
+24 hours complete hone par:
 
 1. Report group mein send
 2. 0-message members identify
@@ -4499,7 +4504,7 @@ AUTOMATIC 5-DAY REPORT
 4. Private message nahi
 5. Sirf 0-message members remove attempt
 6. 1+ message walon ko kuch nahi
-7. New 5-day cycle
+7. New 24-hour cycle
 8. Message log reset
 
 IMPORTANT:
@@ -4518,11 +4523,7 @@ setInterval(
         Number(
           botState.cycleStart
         ) +
-        REPORT_DAYS *
-          24 *
-          60 *
-          60 *
-          1000;
+        REPORT_MS;
 
       if (
         Date.now() >=
@@ -4535,7 +4536,7 @@ setInterval(
         ) {
 
           console.log(
-            "⏰ 5 DAYS COMPLETE"
+            "⏰ 24 HOURS COMPLETE"
           );
 
           /*
@@ -4578,7 +4579,7 @@ setInterval(
           await saveData();
 
           console.log(
-            "🔄 NEW 5-DAY CYCLE STARTED"
+            "🔄 NEW 24-HOUR CYCLE STARTED"
           );
 
         }
@@ -4632,7 +4633,7 @@ app.listen(
 
     console.log(
       "📊 REPORT:",
-      `${REPORT_DAYS} DAYS`
+      `${REPORT_HOURS} HOURS`
     );
 
     console.log(

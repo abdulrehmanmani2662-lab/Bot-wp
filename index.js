@@ -15,13 +15,37 @@ const { createClient } = require("@supabase/supabase-js");
 
 /*
 ==================================================
+WHATSAPP REPORT BOT
+PREMIUM 5-DAY ACTIVITY MONITOR
+==================================================
+*/
+
+/*
+==================================================
 CONFIG
 ==================================================
 */
 
 const PORT = process.env.PORT || 3000;
 
-const REPORT_DAYS = 7;
+/*
+IMPORTANT:
+5 DAYS ONLY
+*/
+
+const REPORT_DAYS = 5;
+
+/*
+Removal ke darmiyan chhota delay.
+Iska maqsad ek hi second mein multiple
+actions fire na karna hai.
+*/
+
+const REMOVE_DELAY_MS = 2500;
+
+/*
+TARGET GROUPS
+*/
 
 const TARGET_GROUP_NAMES = [
   "مین کور کمیٹی ہوپ لائٹ ویلفیئر آرگنائزیشن",
@@ -37,15 +61,15 @@ SUPABASE
 const SUPABASE_URL =
   process.env.SUPABASE_URL || "";
 
-const SUPABASE_SECRET_KEY =
-  process.env.SUPABASE_SECRET_KEY || "";
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const supabase =
   SUPABASE_URL &&
-  SUPABASE_SECRET_KEY
+  SUPABASE_SERVICE_ROLE_KEY
     ? createClient(
         SUPABASE_URL,
-        SUPABASE_SECRET_KEY
+        SUPABASE_SERVICE_ROLE_KEY
       )
     : null;
 
@@ -85,7 +109,10 @@ function loadJSON(file, fallback) {
   try {
     if (fs.existsSync(file)) {
       return JSON.parse(
-        fs.readFileSync(file, "utf8")
+        fs.readFileSync(
+          file,
+          "utf8"
+        )
       );
     }
   } catch (error) {
@@ -102,7 +129,11 @@ function saveJSON(file, data) {
   try {
     fs.writeFileSync(
       file,
-      JSON.stringify(data, null, 2)
+      JSON.stringify(
+        data,
+        null,
+        2
+      )
     );
   } catch (error) {
     console.log(
@@ -119,19 +150,41 @@ FILES
 */
 
 const STATE_FILE =
-  path.join(DATA_DIR, "botState.json");
+  path.join(
+    DATA_DIR,
+    "botState.json"
+  );
 
 const GROUP_FILE =
-  path.join(DATA_DIR, "groups.json");
+  path.join(
+    DATA_DIR,
+    "groups.json"
+  );
 
 const ALL_GROUP_FILE =
-  path.join(DATA_DIR, "allGroups.json");
+  path.join(
+    DATA_DIR,
+    "allGroups.json"
+  );
 
 const LID_MAP_FILE =
-  path.join(DATA_DIR, "lidMap.json");
+  path.join(
+    DATA_DIR,
+    "lidMap.json"
+  );
+
+/*
+Old warning file intentionally kept only
+for compatibility with old installations.
+
+WARNING SYSTEM IS NOT USED.
+*/
 
 const WARNING_FILE =
-  path.join(DATA_DIR, "warnings.json");
+  path.join(
+    DATA_DIR,
+    "warnings.json"
+  );
 
 /*
 ==================================================
@@ -143,7 +196,8 @@ let botState =
   loadJSON(
     STATE_FILE,
     {
-      cycleStart: Date.now()
+      cycleStart:
+        Date.now()
     }
   );
 
@@ -165,11 +219,12 @@ let lidMap =
     {}
   );
 
-let warnings =
-  loadJSON(
-    WARNING_FILE,
-    {}
-  );
+/*
+WARNING DATA IS NOT USED.
+Always empty.
+*/
+
+let warnings = {};
 
 let messageLog = {};
 
@@ -184,47 +239,84 @@ async function loadCloudData() {
     console.log(
       "⚠️ Supabase variables not configured."
     );
+
     return;
   }
 
   try {
-    const { data, error } =
+    const {
+      data,
+      error
+    } =
       await supabase
         .from("bot_storage")
-        .select("key,value");
+        .select(
+          "key,value"
+        );
 
     if (error) {
       throw error;
     }
 
-    for (const row of data || []) {
-      if (row.key === "messageLog") {
-        messageLog = row.value || {};
+    for (
+      const row
+      of data || []
+    ) {
+      if (
+        row.key ===
+        "messageLog"
+      ) {
+        messageLog =
+          row.value || {};
       }
 
-      if (row.key === "botState") {
-        botState = row.value || botState;
+      if (
+        row.key ===
+        "botState"
+      ) {
+        botState =
+          row.value ||
+          botState;
       }
 
-      if (row.key === "savedGroups") {
-        savedGroups = row.value || [];
+      if (
+        row.key ===
+        "savedGroups"
+      ) {
+        savedGroups =
+          row.value || [];
       }
 
-      if (row.key === "allGroups") {
-        allGroups = row.value || [];
+      if (
+        row.key ===
+        "allGroups"
+      ) {
+        allGroups =
+          row.value || [];
       }
 
-      if (row.key === "lidMap") {
-        lidMap = row.value || {};
-      }
-
-      if (row.key === "warnings") {
-        warnings = row.value || {};
+      if (
+        row.key ===
+        "lidMap"
+      ) {
+        lidMap =
+          row.value || {};
       }
     }
 
+    /*
+    Warning system OFF.
+    Ignore any old warning data.
+    */
+
+    warnings = {};
+
     console.log(
       "☁️ Supabase data loaded"
+    );
+
+    console.log(
+      "⚠️ Warning system: OFF"
     );
   } catch (error) {
     console.log(
@@ -240,13 +332,18 @@ SUPABASE SAVE
 ==================================================
 */
 
-async function saveCloud(key, value) {
+async function saveCloud(
+  key,
+  value
+) {
   if (!supabase) {
     return;
   }
 
   try {
-    const { error } =
+    const {
+      error
+    } =
       await supabase
         .from("bot_storage")
         .upsert(
@@ -257,7 +354,8 @@ async function saveCloud(key, value) {
               new Date().toISOString()
           },
           {
-            onConflict: "key"
+            onConflict:
+              "key"
           }
         );
 
@@ -293,9 +391,15 @@ async function saveData() {
     lidMap
   );
 
+  /*
+  Warning file cleared.
+  */
+
+  warnings = {};
+
   saveJSON(
     WARNING_FILE,
-    warnings
+    {}
   );
 
   await saveCloud(
@@ -323,9 +427,14 @@ async function saveData() {
     lidMap
   );
 
+  /*
+  Make sure old warning data
+  is not retained.
+  */
+
   await saveCloud(
     "warnings",
-    warnings
+    {}
   );
 }
 
@@ -349,13 +458,20 @@ function isLid(jid) {
 
 function isPhoneJid(jid) {
   return normalizeJid(jid)
-    .endsWith("@s.whatsapp.net");
+    .endsWith(
+      "@s.whatsapp.net"
+    );
 }
 
 function phoneNumberFromJid(jid) {
-  const n = normalizeJid(jid);
+  const n =
+    normalizeJid(jid);
 
-  if (n.endsWith("@s.whatsapp.net")) {
+  if (
+    n.endsWith(
+      "@s.whatsapp.net"
+    )
+  ) {
     return n.replace(
       "@s.whatsapp.net",
       ""
@@ -366,23 +482,32 @@ function phoneNumberFromJid(jid) {
 }
 
 function formatNumber(jid) {
-  const n = normalizeJid(jid);
+  const n =
+    normalizeJid(jid);
 
-  if (n.endsWith("@s.whatsapp.net")) {
+  if (
+    n.endsWith(
+      "@s.whatsapp.net"
+    )
+  ) {
     return n.replace(
       "@s.whatsapp.net",
       ""
     );
   }
 
-  if (n.endsWith("@c.us")) {
+  if (
+    n.endsWith("@c.us")
+  ) {
     return n.replace(
       "@c.us",
       ""
     );
   }
 
-  if (n.endsWith("@lid")) {
+  if (
+    n.endsWith("@lid")
+  ) {
     return n.replace(
       "@lid",
       ""
@@ -398,9 +523,15 @@ LID ↔ PHONE
 ==================================================
 */
 
-function rememberIdentity(lid, phone) {
-  const l = normalizeJid(lid);
-  const p = normalizeJid(phone);
+function rememberIdentity(
+  lid,
+  phone
+) {
+  const l =
+    normalizeJid(lid);
+
+  const p =
+    normalizeJid(phone);
 
   if (!l || !p) {
     return false;
@@ -423,17 +554,23 @@ function rememberIdentity(lid, phone) {
 }
 
 function getPhoneFromAnyId(id) {
-  const n = normalizeJid(id);
+  const n =
+    normalizeJid(id);
 
   if (!n) {
     return null;
   }
 
   if (isPhoneJid(n)) {
-    return phoneNumberFromJid(n);
+    return phoneNumberFromJid(
+      n
+    );
   }
 
-  if (isLid(n) && lidMap[n]) {
+  if (
+    isLid(n) &&
+    lidMap[n]
+  ) {
     return phoneNumberFromJid(
       lidMap[n]
     );
@@ -442,22 +579,34 @@ function getPhoneFromAnyId(id) {
   return null;
 }
 
-function getMemberNumber(participant) {
+function getMemberNumber(
+  participant
+) {
   const candidates = [
     participant?.phoneNumber,
     participant?.id,
     participant?.lid
   ];
 
-  for (const id of candidates) {
-    if (isPhoneJid(id)) {
+  for (
+    const id
+    of candidates
+  ) {
+    if (
+      isPhoneJid(id)
+    ) {
       return `+${formatNumber(id)}`;
     }
   }
 
-  for (const id of candidates) {
+  for (
+    const id
+    of candidates
+  ) {
     const phone =
-      getPhoneFromAnyId(id);
+      getPhoneFromAnyId(
+        id
+      );
 
     if (phone) {
       return `+${phone}`;
@@ -471,24 +620,37 @@ function getMemberNumber(participant) {
   );
 }
 
-function getPrivateJid(participant) {
+function getPrivateJid(
+  participant
+) {
   const candidates = [
     participant?.phoneNumber,
     participant?.id,
     participant?.lid
   ];
 
-  for (const id of candidates) {
-    const n = normalizeJid(id);
+  for (
+    const id
+    of candidates
+  ) {
+    const n =
+      normalizeJid(id);
 
-    if (isPhoneJid(n)) {
+    if (
+      isPhoneJid(n)
+    ) {
       return n;
     }
   }
 
-  for (const id of candidates) {
+  for (
+    const id
+    of candidates
+  ) {
     const phone =
-      getPhoneFromAnyId(id);
+      getPhoneFromAnyId(
+        id
+      );
 
     if (phone) {
       return `${phone}@s.whatsapp.net`;
@@ -504,7 +666,9 @@ GROUP MATCHING
 ==================================================
 */
 
-function normalizeGroupName(name) {
+function normalizeGroupName(
+  name
+) {
   return String(name || "")
     .normalize("NFKC")
     .toLowerCase()
@@ -512,7 +676,10 @@ function normalizeGroupName(name) {
       /[\u200B-\u200D\uFEFF]/g,
       ""
     )
-    .replace(/\s+/g, " ")
+    .replace(
+      /\s+/g,
+      " "
+    )
     .trim();
 }
 
@@ -530,11 +697,16 @@ function groupMatches(
       targetName
     );
 
-  if (!actual || !target) {
+  if (
+    !actual ||
+    !target
+  ) {
     return false;
   }
 
-  if (actual === target) {
+  if (
+    actual === target
+  ) {
     return true;
   }
 
@@ -546,10 +718,16 @@ function groupMatches(
   }
 
   const a =
-    actual.replace(/\s+/g, "");
+    actual.replace(
+      /\s+/g,
+      ""
+    );
 
   const t =
-    target.replace(/\s+/g, "");
+    target.replace(
+      /\s+/g,
+      ""
+    );
 
   return (
     a === t ||
@@ -566,11 +744,26 @@ HTML ESCAPE
 
 function escapeHTML(text) {
   return String(text || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+    .replace(
+      /'/g,
+      "&#039;"
+    );
 }
 
 /*
@@ -596,7 +789,8 @@ let reconnecting = false;
 
 let connectedAt = null;
 
-const QR_EXPIRE = 50000;
+const QR_EXPIRE =
+  50000;
 
 /*
 ==================================================
@@ -604,7 +798,8 @@ EXPRESS
 ==================================================
 */
 
-const app = express();
+const app =
+  express();
 
 app.use(
   express.json()
@@ -616,7 +811,9 @@ TARGET GROUP
 ==================================================
 */
 
-function isTargetGroup(jid) {
+function isTargetGroup(
+  jid
+) {
   return savedGroups.some(
     group =>
       group.jid === jid
@@ -633,13 +830,22 @@ function getGroupMessageCount(
   groupJid
 ) {
   const data =
-    messageLog[groupJid] || {};
+    messageLog[groupJid] ||
+    {};
 
   let total = 0;
 
-  for (const sender of Object.keys(data)) {
-    if (Array.isArray(data[sender])) {
-      total += data[sender].length;
+  for (
+    const sender
+    of Object.keys(data)
+  ) {
+    if (
+      Array.isArray(
+        data[sender]
+      )
+    ) {
+      total +=
+        data[sender].length;
     }
   }
 
@@ -656,7 +862,8 @@ function getMessagesForMember(
   groupData,
   participant
 ) {
-  const candidates = new Set();
+  const candidates =
+    new Set();
 
   const ids = [
     participant?.id,
@@ -664,8 +871,12 @@ function getMessagesForMember(
     participant?.phoneNumber
   ];
 
-  for (const id of ids) {
-    const n = normalizeJid(id);
+  for (
+    const id
+    of ids
+  ) {
+    const n =
+      normalizeJid(id);
 
     if (!n) {
       continue;
@@ -687,14 +898,21 @@ function getMessagesForMember(
 
   for (
     const [lid, phone]
-    of Object.entries(lidMap)
+    of Object.entries(
+      lidMap
+    )
   ) {
-    for (const id of ids) {
-      const n = normalizeJid(id);
+    for (
+      const id
+      of ids
+    ) {
+      const n =
+        normalizeJid(id);
 
       if (
         isPhoneJid(n) &&
-        normalizeJid(phone) === n
+        normalizeJid(phone) ===
+          n
       ) {
         candidates.add(
           normalizeJid(lid)
@@ -705,7 +923,10 @@ function getMessagesForMember(
 
   let result = [];
 
-  for (const key of candidates) {
+  for (
+    const key
+    of candidates
+  ) {
     if (
       Array.isArray(
         groupData[key]
@@ -725,93 +946,27 @@ function getMessagesForMember(
 
 /*
 ==================================================
-PRIVATE WARNING
+DELAY HELPER
 ==================================================
 */
 
-async function sendPrivateWarning(
-  groupJid,
-  groupName,
-  participant
-) {
-  try {
-    const privateJid =
-      getPrivateJid(
-        participant
-      );
-
-    if (!privateJid) {
-      console.log(
-        "⚠️ WARNING SKIPPED - NO PHONE:",
-        participant?.id ||
-        participant?.lid
-      );
-
-      return false;
-    }
-
-    if (
-      ownerJid &&
-      normalizeJid(privateJid) ===
-      normalizeJid(ownerJid)
-    ) {
-      return false;
-    }
-
-    const number =
-      getMemberNumber(
-        participant
-      );
-
-    const text =
-`⚠️ *7-DAY ACTIVITY WARNING*
-
-Assalam o Alaikum 👋
-
-Aap ne group:
-
-*${groupName}*
-
-mein pichlay 7 din mein *koi message nahi kiya*.
-
-📊 Aap ke messages: *0*
-
-⚠️ Agar aglay 7 din ke period mein bhi aap ne group mein message nahi kiya to aapko group se *remove kar diya jayega*.
-
-Please group mein kam az kam ek message kar dein taake aap active count ho jayen.
-
-👤 Number: *${number}*
-
-— WhatsApp Report Bot`;
-
-    await sock.sendMessage(
-      privateJid,
-      {
-        text
-      }
-    );
-
-    console.log(
-      "⚠️ PRIVATE WARNING SENT:",
-      number,
-      "FROM:",
-      groupName
-    );
-
-    return true;
-  } catch (error) {
-    console.log(
-      "❌ PRIVATE WARNING ERROR:",
-      error.message
-    );
-
-    return false;
-  }
+function sleep(ms) {
+  return new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        ms
+      )
+  );
 }
 
 /*
 ==================================================
 REMOVE MEMBER
+==================================================
+IMPORTANT:
+NO WARNING
+NO PRIVATE MESSAGE
 ==================================================
 */
 
@@ -823,7 +978,8 @@ async function removeMember(
   try {
     const memberJid =
       normalizeJid(
-        participant?.id || ""
+        participant?.id ||
+        ""
       );
 
     const phoneJid =
@@ -843,20 +999,39 @@ async function removeMember(
       return false;
     }
 
+    /*
+    Never remove bot/owner.
+    */
+
     if (
       ownerJid &&
-      normalizeJid(target) ===
-      normalizeJid(ownerJid)
+      normalizeJid(
+        target
+      ) ===
+        normalizeJid(
+          ownerJid
+        )
     ) {
+      console.log(
+        "🛡️ OWNER SKIPPED:",
+        target
+      );
+
       return false;
     }
 
+    /*
+    Never remove admins.
+    */
+
     if (
-      participant?.admin === "admin" ||
-      participant?.admin === "superadmin"
+      participant?.admin ===
+        "admin" ||
+      participant?.admin ===
+        "superadmin"
     ) {
       console.log(
-        "⚠️ REMOVE SKIPPED - ADMIN:",
+        "🛡️ ADMIN SKIPPED:",
         target
       );
 
@@ -871,34 +1046,16 @@ async function removeMember(
 
     console.log(
       "🚫 MEMBER REMOVED:",
-      getMemberNumber(participant),
+      getMemberNumber(
+        participant
+      ),
       "FROM:",
       groupName
     );
 
-    const privateJid =
-      getPrivateJid(
-        participant
-      );
-
-    if (privateJid) {
-      try {
-        await sock.sendMessage(
-          privateJid,
-          {
-            text:
-`🚫 *GROUP REMOVAL NOTICE*
-
-Aap ko *${groupName}* se remove kar diya gaya hai.
-
-Reason:
-Pichlay 2 consecutive 7-day periods mein aap ke messages *0* rahe.
-
-Agar aapko lagta hai ke ye action ghalat hua hai to group admin se rabta karein.`
-          }
-        );
-      } catch {}
-    }
+    /*
+    NO PRIVATE MESSAGE.
+    */
 
     return true;
   } catch (error) {
@@ -914,18 +1071,19 @@ Agar aapko lagta hai ke ye action ghalat hua hai to group admin se rabta karein.
 /*
 ==================================================
 REPORT
-IMPORTANT:
-processWarnings = false
-    => ONLY REPORT
+==================================================
 
-processWarnings = true
-    => REPORT + WARNING/REMOVAL
+processWarnings parameter intentionally ignored.
+There is NO warning system anymore.
+
+Every automatic cycle:
+1. Report
+2. Remove members with exactly 0 messages
 ==================================================
 */
 
 async function sendReport(
-  groupJid,
-  processWarnings = false
+  groupJid
 ) {
   try {
     const meta =
@@ -934,9 +1092,11 @@ async function sendReport(
       );
 
     const groupData =
-      messageLog[groupJid] || {};
+      messageLog[groupJid] ||
+      {};
 
     const active = [];
+
     const inactive = [];
 
     let totalMessages = 0;
@@ -949,7 +1109,8 @@ async function sendReport(
 
     for (
       const participant
-      of meta.participants || []
+      of meta.participants ||
+      []
     ) {
       if (
         participant.id &&
@@ -991,18 +1152,21 @@ async function sendReport(
           count
         });
 
-        totalMessages += count;
+        totalMessages +=
+          count;
       } else {
         inactive.push({
           number,
-          count: 0
+          count: 0,
+          participant
         });
       }
     }
 
     active.sort(
       (a, b) =>
-        b.count - a.count
+        b.count -
+        a.count
     );
 
     /*
@@ -1015,7 +1179,7 @@ async function sendReport(
       "╭━━━━━━━━━━━━━━━━━━━━╮\n";
 
     text +=
-      "   📊 *7 DIN KI REPORT*\n";
+      "   📊 *5 DIN KI REPORT*\n";
 
     text +=
       "╰━━━━━━━━━━━━━━━━━━━━╯\n\n";
@@ -1033,6 +1197,9 @@ async function sendReport(
       }\n`;
 
     text +=
+      `🗓 *PERIOD:* ${REPORT_DAYS} DAYS\n`;
+
+    text +=
       `💬 *TOTAL MESSAGES:* ${totalMessages}\n\n`;
 
     text +=
@@ -1044,13 +1211,18 @@ async function sendReport(
     text +=
       "┗━━━━━━━━━━━━━━━━━━━━┛\n\n";
 
-    if (!active.length) {
+    if (
+      !active.length
+    ) {
       text +=
         "😅 Kisi ne message nahi kiya.\n\n";
     } else {
       let i = 1;
 
-      for (const user of active) {
+      for (
+        const user
+        of active
+      ) {
         text +=
           `${i}. 📱 *${user.number}*\n`;
 
@@ -1070,13 +1242,18 @@ async function sendReport(
     text +=
       "┗━━━━━━━━━━━━━━━━━━━━┛\n\n";
 
-    if (!inactive.length) {
+    if (
+      !inactive.length
+    ) {
       text +=
         "🎉 Sab members active hain!\n";
     } else {
       let i = 1;
 
-      for (const user of inactive) {
+      for (
+        const user
+        of inactive
+      ) {
         text +=
           `${i}. 📱 ${user.number} — *0 messages* 🚫\n`;
 
@@ -1091,7 +1268,7 @@ async function sendReport(
       `📈 *ACTIVE:* ${active.length}\n`;
 
     text +=
-      `📉 *INACTIVE:* ${inactive.length}\n`;
+      `📉 *0 MESSAGE:* ${inactive.length}\n`;
 
     text +=
       `💬 *TOTAL:* ${totalMessages}\n`;
@@ -1101,7 +1278,7 @@ async function sendReport(
 
     /*
     ----------------------------------------------
-    REPORT ALWAYS GOES TO GROUP
+    REPORT ALWAYS TO GROUP
     ----------------------------------------------
     */
 
@@ -1112,121 +1289,26 @@ async function sendReport(
       }
     );
 
-    /*
-    ==================================================
-    VERY IMPORTANT
-    ==================================================
-
-    Agar processWarnings FALSE hai:
-
-    !rana
-    !stats
-
-    dono yahan se return kar jayenge.
-
-    Isliye manual command se:
-    ❌ warning nahi
-    ❌ removal nahi
-    ❌ warning data change nahi
-
-    Sirf report.
-    ==================================================
-    */
-
-    if (!processWarnings) {
-      console.log(
-        "📊 REPORT ONLY - NO WARNING/REMOVAL:",
-        meta.subject
-      );
-
-      return;
-    }
+    console.log(
+      "📊 5-DAY REPORT SENT:",
+      meta.subject
+    );
 
     /*
-    ==================================================
-    AUTOMATIC 7-DAY WARNING / REMOVAL
-    ==================================================
-    */
-
-    if (!warnings[groupJid]) {
-      warnings[groupJid] = {};
-    }
-
-    /*
-    ----------------------------------------------
-    ACTIVE MEMBERS CLEAR OLD WARNING
-    ----------------------------------------------
+    ==============================================
+    REMOVE ZERO-MESSAGE MEMBERS
+    ==============================================
     */
 
     for (
-      const participant
-      of meta.participants || []
+      const user
+      of inactive
     ) {
-      const ids = [
-        participant?.id,
-        participant?.lid,
-        participant?.phoneNumber
-      ];
-
-      let warningKey = null;
-
-      for (const id of ids) {
-        const n = normalizeJid(id);
-
-        if (
-          n &&
-          warnings[groupJid][n]
-        ) {
-          warningKey = n;
-          break;
-        }
-      }
-
-      const times =
-        getMessagesForMember(
-          groupData,
-          participant
-        );
-
-      if (times.length > 0) {
-        if (warningKey) {
-          delete warnings[groupJid][warningKey];
-
-          console.log(
-            "✅ WARNING CLEARED - ACTIVE:",
-            getMemberNumber(
-              participant
-            )
-          );
-        }
-      }
-    }
-
-    /*
-    ----------------------------------------------
-    PROCESS ZERO MEMBERS
-    ----------------------------------------------
-    */
-
-    for (
-      const participant
-      of meta.participants || []
-    ) {
-      const times =
-        getMessagesForMember(
-          groupData,
-          participant
-        );
-
-      const count =
-        times.length;
-
-      if (count !== 0) {
-        continue;
-      }
+      const participant =
+        user.participant;
 
       /*
-      Skip owner/bot.
+      Owner skip
       */
 
       const privateJid =
@@ -1237,120 +1319,123 @@ async function sendReport(
       if (
         ownerJid &&
         privateJid &&
-        normalizeJid(privateJid) ===
-        normalizeJid(ownerJid)
+        normalizeJid(
+          privateJid
+        ) ===
+          normalizeJid(
+            ownerJid
+          )
       ) {
+        console.log(
+          "🛡️ OWNER NOT REMOVED:",
+          user.number
+        );
+
         continue;
       }
 
       /*
-      Find previous warning.
+      Admin skip
       */
 
-      let existingWarning = null;
+      if (
+        participant?.admin ===
+          "admin" ||
+        participant?.admin ===
+          "superadmin"
+      ) {
+        console.log(
+          "🛡️ ADMIN NOT REMOVED:",
+          user.number
+        );
 
-      const possibleKeys = [
-        participant?.id,
-        participant?.lid,
-        participant?.phoneNumber,
-        privateJid
-      ];
-
-      for (const id of possibleKeys) {
-        const n = normalizeJid(id);
-
-        if (
-          n &&
-          warnings[groupJid][n]
-        ) {
-          existingWarning =
-            warnings[groupJid][n];
-
-          break;
-        }
+        continue;
       }
 
       /*
-      ----------------------------------------------
-      FIRST ZERO PERIOD
-      ----------------------------------------------
+      Delay between removal attempts.
       */
 
-      if (!existingWarning) {
-        const sent =
-          await sendPrivateWarning(
-            groupJid,
-            meta.subject,
-            participant
+      await sleep(
+        REMOVE_DELAY_MS
+      );
+
+      /*
+      Double-check current group
+      before attempting removal.
+      */
+
+      try {
+        const latestMeta =
+          await sock.groupMetadata(
+            groupJid
           );
 
-        if (sent) {
-          const key =
-            normalizeJid(
-              privateJid ||
-              participant?.id ||
-              participant?.lid
-            );
+        const stillMember =
+          (
+            latestMeta.participants ||
+            []
+          ).find(
+            p => {
+              const a =
+                normalizeJid(
+                  p.id
+                );
 
-          if (key) {
-            warnings[groupJid][key] = {
-              warnedAt: Date.now()
-            };
-          }
+              const b =
+                normalizeJid(
+                  participant.id
+                );
+
+              const ap =
+                getPrivateJid(p);
+
+              const bp =
+                getPrivateJid(
+                  participant
+                );
+
+              return (
+                a === b ||
+                (
+                  ap &&
+                  bp &&
+                  normalizeJid(ap) ===
+                    normalizeJid(bp)
+                )
+              );
+            }
+          );
+
+        if (!stillMember) {
+          console.log(
+            "ℹ️ ALREADY LEFT:",
+            user.number
+          );
+
+          continue;
         }
-      }
-
-      /*
-      ----------------------------------------------
-      SECOND ZERO PERIOD
-      ----------------------------------------------
-      */
-
-      else {
-        console.log(
-          "🚫 SECOND ZERO PERIOD:",
-          getMemberNumber(
-            participant
-          )
-        );
 
         await removeMember(
           groupJid,
           meta.subject,
-          participant
+          stillMember
         );
-
-        for (const id of possibleKeys) {
-          const n = normalizeJid(id);
-
-          if (
-            n &&
-            warnings[groupJid][n]
-          ) {
-            delete warnings[groupJid][n];
-          }
-        }
+      } catch (checkError) {
+        console.log(
+          "⚠️ MEMBER CHECK ERROR:",
+          checkError.message
+        );
       }
     }
-
-    /*
-    ----------------------------------------------
-    SAVE WARNING DATA
-    ----------------------------------------------
-    */
 
     await saveCloud(
       "lidMap",
       lidMap
     );
 
-    await saveCloud(
-      "warnings",
-      warnings
-    );
-
     console.log(
-      "✅ REPORT + WARNING PROCESS COMPLETE:",
+      "✅ 5-DAY REPORT + ZERO-MESSAGE PROCESS COMPLETE:",
       meta.subject
     );
   } catch (error) {
@@ -1442,7 +1527,8 @@ async function findTargetGroups() {
         detected.push({
           jid: match.jid,
           name: match.name,
-          target: targetName
+          target:
+            targetName
         });
       }
     }
@@ -1491,7 +1577,9 @@ GROUP LIST
 ==================================================
 */
 
-async function sendGroupsList(chat) {
+async function sendGroupsList(
+  chat
+) {
   let text =
     "╭━━━━━━━━━━━━━━━━━━━━╮\n";
 
@@ -1501,12 +1589,17 @@ async function sendGroupsList(chat) {
   text +=
     "╰━━━━━━━━━━━━━━━━━━━━╯\n\n";
 
-  if (!allGroups.length) {
+  if (
+    !allGroups.length
+  ) {
     text +=
       "❌ Groups abhi detect nahi hue.";
   } else {
     allGroups.forEach(
-      (group, index) => {
+      (
+        group,
+        index
+      ) => {
         const target =
           savedGroups.some(
             g =>
@@ -1538,25 +1631,32 @@ DURATION
 ==================================================
 */
 
-function formatDuration(ms) {
+function formatDuration(
+  ms
+) {
   const totalSeconds =
-    Math.floor(ms / 1000);
+    Math.floor(
+      ms / 1000
+    );
 
   const days =
     Math.floor(
-      totalSeconds / 86400
+      totalSeconds /
+        86400
     );
 
   const hours =
     Math.floor(
-      (totalSeconds % 86400) /
-      3600
+      (totalSeconds %
+        86400) /
+        3600
     );
 
   const minutes =
     Math.floor(
-      (totalSeconds % 3600) /
-      60
+      (totalSeconds %
+        3600) /
+        60
     );
 
   return `${days}d ${hours}h ${minutes}m`;
@@ -1568,177 +1668,223 @@ DASHBOARD
 ==================================================
 */
 
-app.get("/", async (req, res) => {
-  let qrImage = "";
+app.get(
+  "/",
+  async (
+    req,
+    res
+  ) => {
+    let qrImage = "";
 
-  if (latestQR) {
-    try {
-      qrImage =
-        await QRCode.toDataURL(
-          latestQR
-        );
-    } catch {}
-  }
+    if (latestQR) {
+      try {
+        qrImage =
+          await QRCode.toDataURL(
+            latestQR
+          );
+      } catch {}
+    }
 
-  const connected =
-    !!ownerJid;
+    const connected =
+      !!ownerJid;
 
-  const elapsed =
-    Math.max(
-      0,
-      Date.now() -
-      Number(
-        botState.cycleStart ||
-        Date.now()
-      )
-    );
+    const elapsed =
+      Math.max(
+        0,
+        Date.now() -
+          Number(
+            botState.cycleStart ||
+            Date.now()
+          )
+      );
 
-  const totalTime =
-    REPORT_DAYS *
-    24 *
-    60 *
-    60 *
-    1000;
+    const totalTime =
+      REPORT_DAYS *
+      24 *
+      60 *
+      60 *
+      1000;
 
-  const progress =
-    Math.min(
-      100,
-      Math.round(
-        (elapsed / totalTime) *
-        100
-      )
-    );
+    const progress =
+      Math.min(
+        100,
+        Math.round(
+          (elapsed /
+            totalTime) *
+            100
+        )
+      );
 
-  const daysPassed =
-    Math.floor(
-      elapsed /
-      (
-        24 *
-        60 *
-        60 *
-        1000
-      )
-    );
+    const daysPassed =
+      Math.floor(
+        elapsed /
+          (
+            24 *
+            60 *
+            60 *
+            1000
+          )
+      );
 
-  const daysLeft =
-    Math.max(
-      0,
-      REPORT_DAYS -
-      daysPassed
-    );
+    const daysLeft =
+      Math.max(
+        0,
+        REPORT_DAYS -
+          daysPassed
+      );
 
-  let totalMessages = 0;
+    let totalMessages = 0;
 
-  for (
-    const group
-    of Object.values(
-      messageLog
-    )
-  ) {
     for (
-      const arr
+      const group
       of Object.values(
-        group || {}
+        messageLog
       )
     ) {
-      if (Array.isArray(arr)) {
-        totalMessages +=
-          arr.length;
+      for (
+        const arr
+        of Object.values(
+          group || {}
+        )
+      ) {
+        if (
+          Array.isArray(arr)
+        ) {
+          totalMessages +=
+            arr.length;
+        }
       }
     }
-  }
 
-  let statusText =
-    "STARTING";
+    let statusText =
+      "STARTING";
 
-  let statusClass =
-    "yellow";
+    let statusClass =
+      "yellow";
 
-  if (connected) {
-    statusText =
-      "CONNECTED";
+    if (connected) {
+      statusText =
+        "CONNECTED";
 
-    statusClass =
-      "green";
-  } else if (
-    connectionStatus === "qr"
-  ) {
-    statusText =
-      "SCAN QR";
+      statusClass =
+        "green";
+    } else if (
+      connectionStatus ===
+      "qr"
+    ) {
+      statusText =
+        "SCAN QR";
 
-    statusClass =
-      "blue";
-  } else if (
-    connectionStatus ===
-    "disconnected"
-  ) {
-    statusText =
-      "RECONNECTING";
+      statusClass =
+        "blue";
+    } else if (
+      connectionStatus ===
+      "disconnected"
+    ) {
+      statusText =
+        "RECONNECTING";
 
-    statusClass =
-      "red";
-  }
+      statusClass =
+        "red";
+    }
 
-  const groupsHTML =
-    savedGroups.length
-      ? savedGroups.map(
-          (group, index) => `
+    /*
+    ----------------------------------------------
+    TARGET GROUPS HTML
+    ----------------------------------------------
+    */
+
+    const groupsHTML =
+      savedGroups.length
+        ? savedGroups
+            .map(
+              (
+                group,
+                index
+              ) => `
 <div class="group-card">
+
+  <div class="group-glow"></div>
+
   <div class="group-icon">
     ${index === 0 ? "🏢" : "🧪"}
   </div>
 
   <div class="group-info">
+
     <div class="group-name">
-      ${escapeHTML(group.name)}
+      ${escapeHTML(
+        group.name
+      )}
     </div>
 
     <div class="group-jid">
-      ${escapeHTML(group.jid)}
+      ${escapeHTML(
+        group.jid
+      )}
     </div>
 
     <div class="group-count">
-      💬 ${getGroupMessageCount(
+      <span>●</span>
+      ${getGroupMessageCount(
         group.jid
-      )} messages
+      )}
+      messages
     </div>
+
   </div>
 
   <div class="active-badge">
-    ● TARGET
+    TARGET
   </div>
+
 </div>
 `
-        ).join("")
-      : `
+            )
+            .join("")
+        : `
 <div class="empty-box">
-  👥
+  <div class="empty-icon">👥</div>
   <b>No target groups detected</b>
   <small>Bot automatically scans groups.</small>
 </div>
 `;
 
-  const allGroupsHTML =
-    allGroups.length
-      ? allGroups.map(
-          group => {
-            const target =
-              savedGroups.some(
-                g =>
-                  g.jid ===
-                  group.jid
-              );
+    /*
+    ----------------------------------------------
+    ALL GROUPS HTML
+    ----------------------------------------------
+    */
 
-            return `
+    const allGroupsHTML =
+      allGroups.length
+        ? allGroups
+            .map(
+              group => {
+                const target =
+                  savedGroups.some(
+                    g =>
+                      g.jid ===
+                      group.jid
+                  );
+
+                return `
 <div class="all-group">
-  <div>
+
+  <div class="all-left">
+
     <div class="all-group-name">
-      ${escapeHTML(group.name)}
+      ${escapeHTML(
+        group.name
+      )}
     </div>
 
     <div class="all-group-jid">
-      ${escapeHTML(group.jid)}
+      ${escapeHTML(
+        group.jid
+      )}
     </div>
+
   </div>
 
   ${
@@ -1746,38 +1892,67 @@ app.get("/", async (req, res) => {
       ? `<span class="target-tag">TARGET</span>`
       : `<span class="normal-tag">GROUP</span>`
   }
+
 </div>
 `;
-          }
-        ).join("")
-      : `
+              }
+            )
+            .join("")
+        : `
 <div class="empty-box">
   No groups loaded yet.
 </div>
 `;
 
-  const qrHTML =
-    qrImage
-      ? `
+    /*
+    ----------------------------------------------
+    QR HTML
+    ----------------------------------------------
+    */
+
+    const qrHTML =
+      qrImage
+        ? `
 <div class="qr-container">
-  <div class="qr-title">
-    📱 Scan QR with WhatsApp
+
+  <div class="qr-ring">
+
+    <div class="qr-inner">
+
+      <img
+        src="${qrImage}"
+        class="qr"
+        alt="WhatsApp QR"
+      >
+
+    </div>
+
   </div>
 
-  <img
-    src="${qrImage}"
-    class="qr"
-    alt="WhatsApp QR"
-  >
+  <div class="qr-title">
+    SCAN WITH WHATSAPP
+  </div>
+
+  <div class="qr-subtitle">
+    Open WhatsApp → Linked Devices
+  </div>
 
   <div class="qr-refresh">
-    🔄 QR automatically refreshes
+    ◉ QR AUTO REFRESH
   </div>
+
 </div>
 `
-      : `
+        : `
 <div class="qr-wait">
-  <div class="spinner"></div>
+
+  <div class="scanner-icon">
+    ${
+      connected
+        ? "✓"
+        : "◌"
+    }
+  </div>
 
   <h3>
     ${
@@ -1794,20 +1969,29 @@ app.get("/", async (req, res) => {
         : "QR generate hote hi yahan show hoga."
     }
   </p>
+
 </div>
 `;
 
-  const uptime =
-    connectedAt
-      ? formatDuration(
-          Date.now() -
-          connectedAt
-        )
-      : "Offline";
+    const uptime =
+      connectedAt
+        ? formatDuration(
+            Date.now() -
+              connectedAt
+          )
+        : "Offline";
 
-  res.send(`
+    /*
+    ----------------------------------------------
+    DASHBOARD
+    ----------------------------------------------
+    */
+
+    res.send(`
 <!DOCTYPE html>
+
 <html>
+
 <head>
 
 <meta charset="UTF-8">
@@ -1815,95 +1999,208 @@ app.get("/", async (req, res) => {
 <meta
   name="viewport"
   content="width=device-width,initial-scale=1"
->
+/>
 
 <meta
   http-equiv="refresh"
   content="10"
->
+/>
 
 <title>
-WhatsApp Report Bot
+WhatsApp Activity Monitor
 </title>
 
 <style>
+
+/* =================================================
+   PREMIUM RESET
+================================================= */
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
-  color: white;
+
+  font-family:
+    Inter,
+    Arial,
+    sans-serif;
+
+  color: #eef5ff;
+
   min-height: 100vh;
 
   background:
     radial-gradient(
       circle at 10% 0%,
-      rgba(0,255,180,.25),
-      transparent 28%
+      rgba(0,255,170,.18),
+      transparent 27%
     ),
     radial-gradient(
-      circle at 90% 10%,
-      rgba(255,0,180,.22),
+      circle at 90% 5%,
+      rgba(124,58,237,.20),
       transparent 30%
     ),
     radial-gradient(
       circle at 50% 100%,
-      rgba(0,150,255,.25),
+      rgba(0,150,255,.13),
       transparent 35%
     ),
-    #050713;
+    #040611;
+
+  overflow-x: hidden;
 }
+
+/* =================================================
+   BACKGROUND GRID
+================================================= */
+
+body::before {
+  content: "";
+
+  position: fixed;
+
+  inset: 0;
+
+  pointer-events: none;
+
+  opacity: .18;
+
+  background-image:
+    linear-gradient(
+      rgba(255,255,255,.025) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(255,255,255,.025) 1px,
+      transparent 1px
+    );
+
+  background-size:
+    45px 45px;
+
+  mask-image:
+    linear-gradient(
+      to bottom,
+      black,
+      transparent
+    );
+}
+
+/* =================================================
+   CONTAINER
+================================================= */
 
 .container {
   width: 94%;
-  max-width: 1400px;
-  margin: auto;
-  padding: 25px 0 50px;
+
+  max-width:
+    1450px;
+
+  margin:
+    0 auto;
+
+  padding:
+    28px 0 55px;
 }
 
+/* =================================================
+   HEADER
+================================================= */
+
 .header {
-  padding: 25px;
+  position: relative;
+
+  padding: 24px;
+
   margin-bottom: 20px;
+
   border-radius: 28px;
 
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+
+  justify-content:
+    space-between;
+
+  align-items:
+    center;
+
   gap: 20px;
 
   background:
     linear-gradient(
       135deg,
-      rgba(0,255,170,.13),
-      rgba(255,0,180,.10),
-      rgba(60,100,255,.13)
+      rgba(255,255,255,.075),
+      rgba(255,255,255,.025)
     );
 
   border:
     1px solid
-    rgba(255,255,255,.14);
+    rgba(255,255,255,.11);
 
   box-shadow:
-    0 20px 80px
-    rgba(0,0,0,.45);
+    0 30px 90px
+    rgba(0,0,0,.42),
+    inset 0 1px 0
+    rgba(255,255,255,.07);
+
+  backdrop-filter:
+    blur(22px);
+
+  overflow: hidden;
+}
+
+.header::after {
+  content: "";
+
+  position: absolute;
+
+  width: 300px;
+  height: 300px;
+
+  right: -180px;
+  top: -180px;
+
+  border-radius: 50%;
+
+  background:
+    rgba(0,255,180,.12);
+
+  filter:
+    blur(50px);
+
+  pointer-events: none;
 }
 
 .brand {
   display: flex;
+
   align-items: center;
-  gap: 15px;
+
+  gap: 16px;
+
+  position: relative;
+
+  z-index: 2;
 }
 
 .logo {
-  width: 65px;
-  height: 65px;
-  border-radius: 20px;
+  width: 68px;
+  height: 68px;
+
+  border-radius: 21px;
 
   display: flex;
+
   align-items: center;
+
   justify-content: center;
 
   font-size: 32px;
@@ -1911,70 +2208,72 @@ body {
   background:
     linear-gradient(
       135deg,
-      #00ff9d,
-      #00aaff,
-      #a855f7,
-      #ff3cac
+      #00f5a0,
+      #00b7ff,
+      #7c3aed,
+      #ec4899
     );
 
   box-shadow:
     0 0 45px
-    rgba(0,255,180,.35);
+    rgba(0,245,160,.23);
+
+  position: relative;
+}
+
+.logo::after {
+  content: "";
+
+  position: absolute;
+
+  inset: 1px;
+
+  border-radius: 20px;
+
+  border:
+    1px solid
+    rgba(255,255,255,.25);
 }
 
 h1 {
   margin: 0;
+
   font-size: 25px;
+
+  letter-spacing:
+    -.5px;
 }
 
 .brand p {
-  margin: 7px 0 0;
-  color: #9aa8bd;
-  font-size: 11px;
+  margin:
+    7px 0 0;
+
+  color:
+    #8290a8;
+
+  font-size:
+    10px;
+
+  letter-spacing:
+    1.5px;
+
+  font-weight:
+    800;
+
+  text-transform:
+    uppercase;
 }
+
+/* =================================================
+   STATUS
+================================================= */
 
 .status {
-  padding: 12px 18px;
-  border-radius: 50px;
+  padding:
+    11px 17px;
 
-  background:
-    rgba(255,255,255,.07);
-
-  border:
-    1px solid
-    rgba(255,255,255,.10);
-
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.green {
-  color: #00ff9d;
-}
-
-.blue {
-  color: #38bdf8;
-}
-
-.red {
-  color: #ff5277;
-}
-
-.yellow {
-  color: #ffd54a;
-}
-
-.stats {
-  display: grid;
-  grid-template-columns:
-    repeat(4,1fr);
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.stat {
-  padding: 21px;
-  border-radius: 22px;
+  border-radius:
+    999px;
 
   background:
     rgba(255,255,255,.055);
@@ -1983,365 +2282,977 @@ h1 {
     1px solid
     rgba(255,255,255,.10);
 
+  font-size:
+    10px;
+
+  font-weight:
+    900;
+
+  letter-spacing:
+    1px;
+
+  position:
+    relative;
+
+  z-index:
+    2;
+}
+
+.green {
+  color:
+    #00f5a0;
+
   box-shadow:
-    0 15px 50px
+    0 0 25px
+    rgba(0,245,160,.08);
+}
+
+.blue {
+  color:
+    #38bdf8;
+}
+
+.red {
+  color:
+    #ff5577;
+}
+
+.yellow {
+  color:
+    #ffd34e;
+}
+
+/* =================================================
+   STATS
+================================================= */
+
+.stats {
+  display:
+    grid;
+
+  grid-template-columns:
+    repeat(4, 1fr);
+
+  gap:
+    15px;
+
+  margin-bottom:
+    20px;
+}
+
+.stat {
+  position:
+    relative;
+
+  padding:
+    21px;
+
+  min-height:
+    135px;
+
+  border-radius:
+    22px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255,255,255,.065),
+      rgba(255,255,255,.025)
+    );
+
+  border:
+    1px solid
+    rgba(255,255,255,.09);
+
+  box-shadow:
+    0 18px 55px
     rgba(0,0,0,.25);
+
+  overflow:
+    hidden;
+
+  backdrop-filter:
+    blur(16px);
+}
+
+.stat::after {
+  content: "";
+
+  position:
+    absolute;
+
+  width:
+    110px;
+
+  height:
+    110px;
+
+  right:
+    -60px;
+
+  bottom:
+    -60px;
+
+  border-radius:
+    50%;
+
+  background:
+    rgba(0,255,180,.08);
+
+  filter:
+    blur(25px);
 }
 
 .stat-icon {
-  font-size: 25px;
+  font-size:
+    25px;
 }
 
 .stat-title {
-  margin-top: 10px;
-  color: #7f8da5;
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 1px;
+  margin-top:
+    10px;
+
+  color:
+    #69768d;
+
+  font-size:
+    8px;
+
+  font-weight:
+    900;
+
+  letter-spacing:
+    1.5px;
 }
 
 .stat-value {
-  margin-top: 5px;
-  font-size: 25px;
-  font-weight: 900;
+  margin-top:
+    5px;
+
+  font-size:
+    25px;
+
+  font-weight:
+    900;
+
+  letter-spacing:
+    -.7px;
 }
+
+/* =================================================
+   MAIN GRID
+================================================= */
 
 .grid {
-  display: grid;
+  display:
+    grid;
+
   grid-template-columns:
     1.15fr .85fr;
-  gap: 20px;
+
+  gap:
+    20px;
 }
 
+/* =================================================
+   CARD
+================================================= */
+
 .card {
-  padding: 22px;
-  margin-bottom: 20px;
-  border-radius: 25px;
+  position:
+    relative;
+
+  padding:
+    22px;
+
+  margin-bottom:
+    20px;
+
+  border-radius:
+    25px;
 
   background:
-    rgba(255,255,255,.05);
+    linear-gradient(
+      145deg,
+      rgba(255,255,255,.065),
+      rgba(255,255,255,.025)
+    );
 
   border:
     1px solid
-    rgba(255,255,255,.10);
+    rgba(255,255,255,.09);
 
   box-shadow:
-    0 20px 60px
-    rgba(0,0,0,.25);
+    0 25px 70px
+    rgba(0,0,0,.27),
+    inset 0 1px 0
+    rgba(255,255,255,.04);
 
   backdrop-filter:
-    blur(15px);
+    blur(20px);
+
+  overflow:
+    hidden;
+}
+
+.card::before {
+  content: "";
+
+  position:
+    absolute;
+
+  top:
+    0;
+
+  left:
+    0;
+
+  width:
+    90px;
+
+  height:
+    1px;
+
+  background:
+    linear-gradient(
+      90deg,
+      #00f5a0,
+      transparent
+    );
+
+  opacity:
+    .7;
 }
 
 .card-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 18px;
+  display:
+    flex;
+
+  justify-content:
+    space-between;
+
+  align-items:
+    center;
+
+  margin-bottom:
+    18px;
 }
 
 .card-title h2 {
-  margin: 0;
-  font-size: 16px;
+  margin:
+    0;
+
+  font-size:
+    15px;
+
+  letter-spacing:
+    -.2px;
 }
 
 .card-title span {
-  color: #718096;
-  font-size: 9px;
-  font-weight: 900;
+  color:
+    #65738a;
+
+  font-size:
+    8px;
+
+  font-weight:
+    900;
+
+  letter-spacing:
+    1px;
 }
 
+/* =================================================
+   DEVICE
+================================================= */
+
 .device {
-  padding: 17px;
-  border-radius: 18px;
-  background: rgba(0,0,0,.22);
+  padding:
+    17px;
+
+  border-radius:
+    18px;
+
+  background:
+    rgba(0,0,0,.20);
+
+  border:
+    1px solid
+    rgba(255,255,255,.055);
 }
 
 .device-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 15px;
-  padding: 12px 0;
+  display:
+    flex;
+
+  justify-content:
+    space-between;
+
+  gap:
+    15px;
+
+  padding:
+    12px 0;
 
   border-bottom:
     1px solid
-    rgba(255,255,255,.07);
+    rgba(255,255,255,.055);
 }
 
 .device-row:last-child {
-  border-bottom: 0;
+  border-bottom:
+    0;
 }
 
 .device-label {
-  color: #78859c;
-  font-size: 11px;
+  color:
+    #738198;
+
+  font-size:
+    10px;
 }
 
 .device-value {
-  font-size: 12px;
-  font-weight: 800;
-  text-align: right;
-  word-break: break-word;
+  font-size:
+    11px;
+
+  font-weight:
+    800;
+
+  text-align:
+    right;
+
+  word-break:
+    break-word;
 }
 
 .online {
-  color: #00ff9d;
+  color:
+    #00f5a0;
 }
+
+/* =================================================
+   NOTICE
+================================================= */
 
 .notice {
-  margin-top: 15px;
-  padding: 13px;
-  border-radius: 15px;
+  margin-top:
+    15px;
 
-  color: #8fd8ff;
-  font-size: 10px;
-  line-height: 1.7;
+  padding:
+    14px;
+
+  border-radius:
+    16px;
+
+  color:
+    #93a5bd;
+
+  font-size:
+    9px;
+
+  line-height:
+    1.8;
 
   background:
-    rgba(0,150,255,.08);
+    rgba(0,150,255,.055);
 
   border:
     1px solid
-    rgba(0,150,255,.16);
+    rgba(0,150,255,.12);
 }
+
+.notice b {
+  color:
+    #dce8f7;
+}
+
+/* =================================================
+   QR
+================================================= */
 
 .qr-container {
-  text-align: center;
+  text-align:
+    center;
+
+  padding:
+    5px 0 10px;
 }
 
-.qr {
-  width: 250px;
-  max-width: 100%;
-  padding: 10px;
-  background: white;
-  border-radius: 20px;
-}
+.qr-ring {
+  width:
+    285px;
 
-.qr-title {
-  margin-bottom: 15px;
-  color: #c9d3e2;
-  font-size: 12px;
-  font-weight: 800;
-}
+  max-width:
+    100%;
 
-.qr-refresh {
-  margin-top: 12px;
-  color: #65748a;
-  font-size: 10px;
-}
+  margin:
+    0 auto 17px;
 
-.qr-wait {
-  text-align: center;
-  padding: 35px 10px;
-}
+  padding:
+    10px;
 
-.spinner {
-  width: 45px;
-  height: 45px;
-  margin: auto;
-
-  border: 4px solid
-    rgba(255,255,255,.08);
-
-  border-top-color:
-    #00ff9d;
-
-  border-right-color:
-    #a855f7;
-
-  border-radius: 50%;
-
-  animation:
-    spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.group-card {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  padding: 14px;
-  margin-bottom: 10px;
-  border-radius: 18px;
+  border-radius:
+    27px;
 
   background:
     linear-gradient(
       135deg,
-      rgba(0,255,160,.06),
-      rgba(168,85,247,.05)
-    );
-
-  border:
-    1px solid
-    rgba(255,255,255,.07);
-}
-
-.group-icon {
-  width: 46px;
-  height: 46px;
-  flex-shrink: 0;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 14px;
-
-  background:
-    linear-gradient(
-      135deg,
-      #00ff9d,
+      #00f5a0,
+      #00b7ff,
       #7c3aed,
       #ec4899
     );
+
+  box-shadow:
+    0 0 45px
+    rgba(0,245,160,.12);
 }
 
-.group-info {
-  flex: 1;
-  min-width: 0;
+.qr-inner {
+  padding:
+    12px;
+
+  background:
+    #ffffff;
+
+  border-radius:
+    19px;
 }
 
-.group-name {
-  font-size: 13px;
-  font-weight: 900;
-  line-height: 1.4;
+.qr {
+  display:
+    block;
+
+  width:
+    100%;
+
+  border-radius:
+    10px;
 }
 
-.group-jid {
-  margin-top: 5px;
-  color: #5e6b82;
-  font-size: 8px;
-  word-break: break-all;
+.qr-title {
+  color:
+    #dce7f5;
+
+  font-size:
+    11px;
+
+  font-weight:
+    900;
+
+  letter-spacing:
+    1.5px;
 }
 
-.group-count {
-  margin-top: 6px;
-  color: #00ff9d;
-  font-size: 10px;
-  font-weight: 800;
+.qr-subtitle {
+  margin-top:
+    6px;
+
+  color:
+    #68768c;
+
+  font-size:
+    9px;
 }
 
-.active-badge {
-  color: #00ff9d;
-  font-size: 8px;
-  font-weight: 900;
+.qr-refresh {
+  margin-top:
+    13px;
+
+  color:
+    #00d99a;
+
+  font-size:
+    8px;
+
+  font-weight:
+    900;
+
+  letter-spacing:
+    1px;
 }
 
-.all-group {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
+/* =================================================
+   QR WAIT
+================================================= */
 
-  padding: 12px;
-  margin-bottom: 8px;
-  border-radius: 15px;
+.qr-wait {
+  text-align:
+    center;
+
+  padding:
+    35px 10px;
+}
+
+.scanner-icon {
+  width:
+    65px;
+
+  height:
+    65px;
+
+  margin:
+    0 auto 15px;
+
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  border-radius:
+    20px;
+
+  font-size:
+    32px;
+
+  color:
+    #00f5a0;
+
+  background:
+    rgba(0,245,160,.07);
+
+  border:
+    1px solid
+    rgba(0,245,160,.15);
+}
+
+.qr-wait h3 {
+  margin:
+    0;
+
+  font-size:
+    15px;
+}
+
+.qr-wait p {
+  color:
+    #68768c;
+
+  font-size:
+    9px;
+}
+
+/* =================================================
+   TARGET GROUP
+================================================= */
+
+.group-card {
+  position:
+    relative;
+
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  gap:
+    13px;
+
+  padding:
+    14px;
+
+  margin-bottom:
+    10px;
+
+  border-radius:
+    18px;
 
   background:
     rgba(0,0,0,.16);
 
   border:
     1px solid
-    rgba(255,255,255,.05);
+    rgba(255,255,255,.065);
+
+  overflow:
+    hidden;
+}
+
+.group-glow {
+  position:
+    absolute;
+
+  width:
+    80px;
+
+  height:
+    80px;
+
+  left:
+    -40px;
+
+  top:
+    -40px;
+
+  border-radius:
+    50%;
+
+  background:
+    rgba(0,245,160,.10);
+
+  filter:
+    blur(20px);
+}
+
+.group-icon {
+  width:
+    46px;
+
+  height:
+    46px;
+
+  flex-shrink:
+    0;
+
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  border-radius:
+    14px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #00f5a0,
+      #00aaff,
+      #7c3aed
+    );
+
+  position:
+    relative;
+}
+
+.group-info {
+  flex:
+    1;
+
+  min-width:
+    0;
+}
+
+.group-name {
+  font-size:
+    12px;
+
+  font-weight:
+    900;
+
+  line-height:
+    1.4;
+}
+
+.group-jid {
+  margin-top:
+    5px;
+
+  color:
+    #4f5d73;
+
+  font-size:
+    7px;
+
+  word-break:
+    break-all;
+}
+
+.group-count {
+  margin-top:
+    6px;
+
+  color:
+    #00e89d;
+
+  font-size:
+    9px;
+
+  font-weight:
+    800;
+}
+
+.group-count span {
+  font-size:
+    7px;
+}
+
+.active-badge {
+  color:
+    #00f5a0;
+
+  font-size:
+    7px;
+
+  font-weight:
+    900;
+
+  letter-spacing:
+    1px;
+
+  padding:
+    6px 8px;
+
+  border-radius:
+    8px;
+
+  background:
+    rgba(0,245,160,.07);
+
+  border:
+    1px solid
+    rgba(0,245,160,.10);
+}
+
+/* =================================================
+   ALL GROUPS
+================================================= */
+
+.all-group {
+  display:
+    flex;
+
+  justify-content:
+    space-between;
+
+  align-items:
+    center;
+
+  gap:
+    10px;
+
+  padding:
+    12px;
+
+  margin-bottom:
+    8px;
+
+  border-radius:
+    15px;
+
+  background:
+    rgba(0,0,0,.14);
+
+  border:
+    1px solid
+    rgba(255,255,255,.045);
+}
+
+.all-left {
+  min-width:
+    0;
 }
 
 .all-group-name {
-  font-size: 11px;
-  font-weight: 800;
+  font-size:
+    10px;
+
+  font-weight:
+    800;
 }
 
 .all-group-jid {
-  margin-top: 4px;
-  color: #56647b;
-  font-size: 8px;
-  word-break: break-all;
+  margin-top:
+    4px;
+
+  color:
+    #4e5b70;
+
+  font-size:
+    7px;
+
+  word-break:
+    break-all;
 }
 
 .target-tag,
 .normal-tag {
-  padding: 5px 8px;
-  border-radius: 8px;
-  font-size: 7px;
-  font-weight: 900;
+  padding:
+    5px 8px;
+
+  border-radius:
+    8px;
+
+  font-size:
+    7px;
+
+  font-weight:
+    900;
+
+  flex-shrink:
+    0;
 }
 
 .target-tag {
-  color: #00ff9d;
+  color:
+    #00f5a0;
+
   background:
-    rgba(0,255,157,.10);
+    rgba(0,245,160,.08);
+
+  border:
+    1px solid
+    rgba(0,245,160,.10);
 }
 
 .normal-tag {
-  color: #7b879b;
+  color:
+    #718096;
+
   background:
-    rgba(255,255,255,.04);
+    rgba(255,255,255,.035);
 }
 
+/* =================================================
+   PROGRESS
+================================================= */
+
 .progress-wrap {
-  margin-top: 10px;
+  margin-top:
+    10px;
 }
 
 .progress-info {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 9px;
-  color: #8b98ad;
-  font-size: 10px;
+  display:
+    flex;
+
+  justify-content:
+    space-between;
+
+  margin-bottom:
+    9px;
+
+  color:
+    #7d8ba1;
+
+  font-size:
+    9px;
 }
 
 .progress {
-  height: 9px;
-  overflow: hidden;
-  border-radius: 20px;
+  height:
+    9px;
+
+  overflow:
+    hidden;
+
+  border-radius:
+    20px;
+
   background:
-    rgba(255,255,255,.07);
+    rgba(255,255,255,.055);
+
+  border:
+    1px solid
+    rgba(255,255,255,.04);
 }
 
 .progress-bar {
-  width: ${progress}%;
-  height: 100%;
+  width:
+    ${progress}%;
+
+  height:
+    100%;
+
+  border-radius:
+    inherit;
 
   background:
     linear-gradient(
       90deg,
-      #00ff9d,
-      #00aaff,
-      #a855f7,
-      #ff3cac
+      #00f5a0,
+      #00b7ff,
+      #7c3aed,
+      #ec4899
     );
+
+  box-shadow:
+    0 0 18px
+    rgba(0,245,160,.20);
 }
 
+/* =================================================
+   EMPTY
+================================================= */
+
 .empty-box {
-  padding: 30px;
-  text-align: center;
-  color: #8793a7;
+  padding:
+    30px;
+
+  text-align:
+    center;
+
+  color:
+    #7b889e;
+}
+
+.empty-icon {
+  font-size:
+    25px;
+
+  margin-bottom:
+    8px;
 }
 
 .empty-box b {
-  display: block;
-  margin-top: 8px;
-  color: white;
-  font-size: 13px;
+  display:
+    block;
+
+  color:
+    #e6eef8;
+
+  font-size:
+    12px;
 }
 
 .empty-box small {
-  display: block;
-  margin-top: 7px;
-  font-size: 10px;
+  display:
+    block;
+
+  margin-top:
+    7px;
+
+  font-size:
+    9px;
 }
+
+/* =================================================
+   FOOTER
+================================================= */
 
 .footer {
-  text-align: center;
-  color: #56647a;
-  font-size: 9px;
+  text-align:
+    center;
+
+  color:
+    #4d5b70;
+
+  font-size:
+    8px;
+
+  letter-spacing:
+    .5px;
+
+  padding-top:
+    5px;
 }
 
+/* =================================================
+   RESPONSIVE
+================================================= */
+
 @media(max-width:900px) {
+
   .stats {
     grid-template-columns:
       repeat(2,1fr);
@@ -2351,26 +3262,82 @@ h1 {
     grid-template-columns:
       1fr;
   }
+
 }
 
 @media(max-width:500px) {
+
+  .container {
+    width:
+      92%;
+
+    padding-top:
+      16px;
+  }
+
   .header {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction:
+      column;
+
+    align-items:
+      flex-start;
+
+    padding:
+      20px;
   }
 
   .stats {
     grid-template-columns:
       repeat(2,1fr);
+
+    gap:
+      10px;
   }
 
   .stat {
-    padding: 15px;
+    padding:
+      15px;
+
+    min-height:
+      115px;
   }
 
   .stat-value {
-    font-size: 19px;
+    font-size:
+      18px;
   }
+
+  .card {
+    padding:
+      17px;
+  }
+
+  .logo {
+    width:
+      56px;
+
+    height:
+      56px;
+
+    font-size:
+      27px;
+  }
+
+  h1 {
+    font-size:
+      20px;
+  }
+
+  .group-card {
+    padding:
+      11px;
+  }
+
+  .active-badge {
+    display:
+      none;
+  }
+
 }
 
 </style>
@@ -2381,295 +3348,361 @@ h1 {
 
 <div class="container">
 
-<div class="header">
+  <!-- HEADER -->
 
-  <div class="brand">
+  <div class="header">
 
-    <div class="logo">
-      💬
+    <div class="brand">
+
+      <div class="logo">
+        💬
+      </div>
+
+      <div>
+
+        <h1>
+          WhatsApp Activity Monitor
+        </h1>
+
+        <p>
+          PREMIUM • CLOUD • 5-DAY MONITORING
+        </p>
+
+      </div>
+
+    </div>
+
+    <div
+      class="status ${statusClass}"
+    >
+      ● ${statusText}
+    </div>
+
+  </div>
+
+  <!-- STATS -->
+
+  <div class="stats">
+
+    <div class="stat">
+
+      <div class="stat-icon">
+        📱
+      </div>
+
+      <div class="stat-title">
+        WHATSAPP
+      </div>
+
+      <div class="stat-value">
+        ${
+          connected
+            ? "Online"
+            : "Offline"
+        }
+      </div>
+
+    </div>
+
+    <div class="stat">
+
+      <div class="stat-icon">
+        🎯
+      </div>
+
+      <div class="stat-title">
+        TARGET GROUPS
+      </div>
+
+      <div class="stat-value">
+        ${savedGroups.length}/2
+      </div>
+
+    </div>
+
+    <div class="stat">
+
+      <div class="stat-icon">
+        💬
+      </div>
+
+      <div class="stat-title">
+        MESSAGES
+      </div>
+
+      <div class="stat-value">
+        ${totalMessages}
+      </div>
+
+    </div>
+
+    <div class="stat">
+
+      <div class="stat-icon">
+        ☁️
+      </div>
+
+      <div class="stat-title">
+        STORAGE
+      </div>
+
+      <div class="stat-value">
+        ${
+          supabase
+            ? "Cloud"
+            : "Local"
+        }
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- MAIN -->
+
+  <div class="grid">
+
+    <div>
+
+      <!-- LINKED WHATSAPP -->
+
+      <div class="card">
+
+        <div class="card-title">
+
+          <h2>
+            📱 Linked WhatsApp
+          </h2>
+
+          <span>
+            LIVE
+          </span>
+
+        </div>
+
+        <div class="device">
+
+          <div class="device-row">
+
+            <span class="device-label">
+              Status
+            </span>
+
+            <span class="device-value online">
+              ${
+                connected
+                  ? "● Connected"
+                  : statusText
+              }
+            </span>
+
+          </div>
+
+          <div class="device-row">
+
+            <span class="device-label">
+              Number
+            </span>
+
+            <span class="device-value">
+              ${
+                ownerJid
+                  ? escapeHTML(
+                      formatNumber(
+                        ownerJid
+                      )
+                    )
+                  : "Not linked"
+              }
+            </span>
+
+          </div>
+
+          <div class="device-row">
+
+            <span class="device-label">
+              Cloud Storage
+            </span>
+
+            <span class="device-value">
+              ${
+                supabase
+                  ? "🟢 Active"
+                  : "🟡 Waiting"
+              }
+            </span>
+
+          </div>
+
+          <div class="device-row">
+
+            <span class="device-label">
+              Uptime
+            </span>
+
+            <span class="device-value">
+              ${uptime}
+            </span>
+
+          </div>
+
+        </div>
+
+        <div class="notice">
+
+          ☁️ Message counting data
+          Supabase mein save hoga.
+
+          <br><br>
+
+          📊 <b>!rana / !stats</b>
+          = sirf 5-day report.
+
+          <br><br>
+
+          🟢 5 din mein <b>1+ message</b>
+          = active.
+
+          <br><br>
+
+          🔴 5 din mein <b>0 messages</b>
+          = automatic removal attempt.
+
+          <br><br>
+
+          🔕 Private warning system:
+          <b>OFF</b>
+
+        </div>
+
+      </div>
+
+      <!-- TARGET GROUPS -->
+
+      <div class="card">
+
+        <div class="card-title">
+
+          <h2>
+            🎯 Target Groups
+          </h2>
+
+          <span>
+            ${savedGroups.length}/2
+          </span>
+
+        </div>
+
+        ${groupsHTML}
+
+      </div>
+
     </div>
 
     <div>
 
-      <h1>
-        WhatsApp Report Bot
-      </h1>
+      <!-- QR -->
 
-      <p>
-        BAMB • Cloud Saved • 7-Day Monitoring
-      </p>
+      <div class="card">
+
+        <div class="card-title">
+
+          <h2>
+            🔐 WhatsApp QR
+          </h2>
+
+          <span>
+            AUTO
+          </span>
+
+        </div>
+
+        ${qrHTML}
+
+      </div>
+
+      <!-- ALL GROUPS -->
+
+      <div class="card">
+
+        <div class="card-title">
+
+          <h2>
+            📋 All Groups
+          </h2>
+
+          <span>
+            ${allGroups.length}
+          </span>
+
+        </div>
+
+        ${allGroupsHTML}
+
+      </div>
+
+      <!-- CYCLE -->
+
+      <div class="card">
+
+        <div class="card-title">
+
+          <h2>
+            📊 5-Day Activity Cycle
+          </h2>
+
+          <span>
+            ${daysLeft} DAYS LEFT
+          </span>
+
+        </div>
+
+        <div class="progress-wrap">
+
+          <div class="progress-info">
+
+            <span>
+              ${progress}% completed
+            </span>
+
+            <span>
+              ${daysLeft} days left
+            </span>
+
+          </div>
+
+          <div class="progress">
+
+            <div class="progress-bar"></div>
+
+          </div>
+
+        </div>
+
+      </div>
 
     </div>
 
   </div>
 
-  <div class="status ${statusClass}">
-    ● ${statusText}
-  </div>
+  <div class="footer">
 
-</div>
-
-<div class="stats">
-
-  <div class="stat">
-    <div class="stat-icon">📱</div>
-    <div class="stat-title">WHATSAPP</div>
-    <div class="stat-value">
-      ${
-        connected
-          ? "Online"
-          : "Offline"
-      }
-    </div>
-  </div>
-
-  <div class="stat">
-    <div class="stat-icon">🎯</div>
-    <div class="stat-title">TARGET GROUPS</div>
-    <div class="stat-value">
-      ${savedGroups.length}/2
-    </div>
-  </div>
-
-  <div class="stat">
-    <div class="stat-icon">💬</div>
-    <div class="stat-title">MESSAGES</div>
-    <div class="stat-value">
-      ${totalMessages}
-    </div>
-  </div>
-
-  <div class="stat">
-    <div class="stat-icon">☁️</div>
-    <div class="stat-title">STORAGE</div>
-    <div class="stat-value">
-      ${
-        supabase
-          ? "Cloud"
-          : "Local"
-      }
-    </div>
-  </div>
-
-</div>
-
-<div class="grid">
-
-<div>
-
-<div class="card">
-
-  <div class="card-title">
-
-    <h2>
-      📱 Linked WhatsApp
-    </h2>
-
-    <span>
-      LIVE
-    </span>
+    WhatsApp Activity Monitor
+    • PREMIUM DASHBOARD
+    • 5-DAY REPORT
+    • WARNING OFF
+    • ZERO-MESSAGE AUTO REMOVAL
 
   </div>
-
-  <div class="device">
-
-    <div class="device-row">
-      <span class="device-label">
-        Status
-      </span>
-
-      <span class="device-value online">
-        ${
-          connected
-            ? "● Connected"
-            : statusText
-        }
-      </span>
-    </div>
-
-    <div class="device-row">
-      <span class="device-label">
-        Number
-      </span>
-
-      <span class="device-value">
-        ${
-          ownerJid
-            ? escapeHTML(
-                formatNumber(
-                  ownerJid
-                )
-              )
-            : "Not linked"
-        }
-      </span>
-    </div>
-
-    <div class="device-row">
-      <span class="device-label">
-        Cloud Storage
-      </span>
-
-      <span class="device-value">
-        ${
-          supabase
-            ? "🟢 Active"
-            : "🟡 Waiting"
-        }
-      </span>
-    </div>
-
-    <div class="device-row">
-      <span class="device-label">
-        Uptime
-      </span>
-
-      <span class="device-value">
-        ${uptime}
-      </span>
-    </div>
-
-  </div>
-
-  <div class="notice">
-    ☁️ Message counting data Supabase mein
-    save hoga.
-
-    <br><br>
-
-    📊 <b>!rana / !stats</b> =
-    sirf report.
-
-    <br><br>
-
-    ⚠️ Automatic 7-day cycle =
-    report + private warning.
-
-    <br><br>
-
-    🚫 Do consecutive 7-day periods mein
-    0 messages par removal attempt.
-  </div>
-
-</div>
-
-<div class="card">
-
-  <div class="card-title">
-
-    <h2>
-      🎯 Target Groups
-    </h2>
-
-    <span>
-      ${savedGroups.length}/2
-    </span>
-
-  </div>
-
-  ${groupsHTML}
-
-</div>
-
-</div>
-
-<div>
-
-<div class="card">
-
-  <div class="card-title">
-
-    <h2>
-      🔐 WhatsApp QR
-    </h2>
-
-    <span>
-      AUTO
-    </span>
-
-  </div>
-
-  ${qrHTML}
-
-</div>
-
-<div class="card">
-
-  <div class="card-title">
-
-    <h2>
-      📋 All Groups
-    </h2>
-
-    <span>
-      ${allGroups.length}
-    </span>
-
-  </div>
-
-  ${allGroupsHTML}
-
-</div>
-
-<div class="card">
-
-  <div class="card-title">
-
-    <h2>
-      📊 7-Day Cycle
-    </h2>
-
-    <span>
-      ${daysLeft} DAYS LEFT
-    </span>
-
-  </div>
-
-  <div class="progress-wrap">
-
-    <div class="progress-info">
-
-      <span>
-        ${progress}% completed
-      </span>
-
-      <span>
-        ${daysLeft} days left
-      </span>
-
-    </div>
-
-    <div class="progress">
-
-      <div class="progress-bar"></div>
-
-    </div>
-
-  </div>
-
-</div>
-
-</div>
-
-</div>
-
-<div class="footer">
-
-  WhatsApp Report Bot
-  • BAMB Dashboard
-  • !rana = Report Only
-  • !stats = Report Only
-  • Automatic Private Warning
-  • Automatic Removal
-
-</div>
 
 </div>
 
 </body>
+
 </html>
 `);
-});
+  }
+);
 
 /*
 ==================================================
@@ -2679,9 +3712,14 @@ HEALTH
 
 app.get(
   "/health",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     res.json({
-      status: "ok",
+
+      status:
+        "ok",
 
       whatsapp:
         ownerJid
@@ -2699,6 +3737,15 @@ app.get(
 
       cloud:
         !!supabase,
+
+      reportDays:
+        REPORT_DAYS,
+
+      warnings:
+        "OFF",
+
+      autoRemoval:
+        "ON",
 
       messages:
         Object.values(
@@ -2718,7 +3765,9 @@ app.get(
               ) =>
                 sum +
                 (
-                  Array.isArray(arr)
+                  Array.isArray(
+                    arr
+                  )
                     ? arr.length
                     : 0
                 ),
@@ -2732,23 +3781,9 @@ app.get(
           lidMap
         ).length,
 
-      warnings:
-        Object.values(
-          warnings
-        ).reduce(
-          (
-            total,
-            group
-          ) =>
-            total +
-            Object.keys(
-              group || {}
-            ).length,
-          0
-        ),
-
       lastError:
-        lastError || null
+        lastError ||
+        null
     });
   }
 );
@@ -2785,14 +3820,17 @@ async function startBot() {
 
     sock =
       makeWASocket({
+
         version,
 
         logger:
           pino({
-            level: "silent"
+            level:
+              "silent"
           }),
 
         auth: {
+
           creds:
             state.creds,
 
@@ -2800,9 +3838,11 @@ async function startBot() {
             makeCacheableSignalKeyStore(
               state.keys,
               pino({
-                level: "silent"
+                level:
+                  "silent"
               })
             )
+
         },
 
         printQRInTerminal:
@@ -2819,6 +3859,7 @@ async function startBot() {
 
         generateHighQualityLinkPreview:
           false
+
       });
 
     sock.ev.on(
@@ -2835,6 +3876,7 @@ async function startBot() {
     sock.ev.on(
       "connection.update",
       async update => {
+
         const {
           connection,
           qr,
@@ -2842,7 +3884,9 @@ async function startBot() {
         } = update;
 
         if (qr) {
-          latestQR = qr;
+
+          latestQR =
+            qr;
 
           qrGeneratedAt =
             Date.now();
@@ -2856,11 +3900,20 @@ async function startBot() {
         }
 
         if (
-          connection === "open"
+          connection ===
+          "open"
         ) {
-          latestQR = null;
 
-          qrGeneratedAt = 0;
+          latestQR =
+            null;
+
+          qrGeneratedAt =
+            0;
+
+          /*
+          NUMBER AUTOMATICALLY
+          FROM CONNECTED WHATSAPP.
+          */
 
           ownerJid =
             sock.user?.id ||
@@ -2872,9 +3925,11 @@ async function startBot() {
           connectedAt =
             Date.now();
 
-          lastError = "";
+          lastError =
+            "";
 
-          reconnecting = false;
+          reconnecting =
+            false;
 
           console.log(
             "================================"
@@ -2895,19 +3950,18 @@ async function startBot() {
           );
 
           console.log(
-            "📊 !RANA: REPORT ONLY"
+            "📊 REPORT:",
+            `${REPORT_DAYS} DAYS`
           );
 
           console.log(
-            "📊 !STATS: REPORT ONLY"
+            "🔕 WARNING:",
+            "OFF"
           );
 
           console.log(
-            "⚠️ AUTO PRIVATE WARNING: ON"
-          );
-
-          console.log(
-            "🚫 AUTO REMOVAL: ON"
+            "🚫 ZERO-MESSAGE REMOVAL:",
+            "ON"
           );
 
           console.log(
@@ -2918,18 +3972,24 @@ async function startBot() {
         }
 
         if (
-          connection === "close"
+          connection ===
+          "close"
         ) {
-          ownerJid = null;
 
-          connectedAt = null;
+          ownerJid =
+            null;
 
-          latestQR = null;
+          connectedAt =
+            null;
+
+          latestQR =
+            null;
 
           connectionStatus =
             "disconnected";
 
-          let statusCode = null;
+          let statusCode =
+            null;
 
           try {
             statusCode =
@@ -2944,12 +4004,14 @@ async function startBot() {
             statusCode
           );
 
-          reconnecting = false;
+          reconnecting =
+            false;
 
           if (
             statusCode ===
             DisconnectReason.loggedOut
           ) {
+
             console.log(
               "⚠️ WhatsApp logged out."
             );
@@ -2962,6 +4024,7 @@ async function startBot() {
             5000
           );
         }
+
       }
     );
 
@@ -2977,7 +4040,9 @@ async function startBot() {
         messages,
         type
       }) => {
+
         try {
+
           if (
             !messages?.length ||
             type !== "notify"
@@ -2985,12 +4050,14 @@ async function startBot() {
             return;
           }
 
-          let changed = false;
+          let changed =
+            false;
 
           for (
             const msg
             of messages
           ) {
+
             if (
               !msg ||
               !msg.message
@@ -3003,7 +4070,9 @@ async function startBot() {
 
             if (
               !chat ||
-              !chat.endsWith("@g.us")
+              !chat.endsWith(
+                "@g.us"
+              )
             ) {
               continue;
             }
@@ -3023,7 +4092,8 @@ async function startBot() {
                 senderPhone
               )
             ) {
-              changed = true;
+              changed =
+                true;
             }
 
             /*
@@ -3072,7 +4142,8 @@ async function startBot() {
                 : null;
 
             const isOwner =
-              msg.key.fromMe === true ||
+              msg.key.fromMe ===
+                true ||
               (
                 ownerNormalized &&
                 phoneNormalized &&
@@ -3083,22 +4154,26 @@ async function startBot() {
             /*
             ==========================================
             !RANA
-            IMPORTANT:
             REPORT ONLY
             ==========================================
             */
 
             if (
-              command === "!rana"
+              command ===
+              "!rana"
             ) {
+
               if (
                 isOwner &&
-                isTargetGroup(chat)
+                isTargetGroup(
+                  chat
+                )
               ) {
+
                 await sendReport(
-                  chat,
-                  false
+                  chat
                 );
+
               }
 
               continue;
@@ -3107,22 +4182,26 @@ async function startBot() {
             /*
             ==========================================
             !STATS
-            IMPORTANT:
             REPORT ONLY
             ==========================================
             */
 
             if (
-              command === "!stats"
+              command ===
+              "!stats"
             ) {
+
               if (
                 isOwner &&
-                isTargetGroup(chat)
+                isTargetGroup(
+                  chat
+                )
               ) {
+
                 await sendReport(
-                  chat,
-                  false
+                  chat
                 );
+
               }
 
               continue;
@@ -3135,12 +4214,16 @@ async function startBot() {
             */
 
             if (
-              command === "!groups"
+              command ===
+              "!groups"
             ) {
+
               if (isOwner) {
+
                 await sendGroupsList(
                   chat
                 );
+
               }
 
               continue;
@@ -3165,7 +4248,9 @@ async function startBot() {
             */
 
             if (
-              !isTargetGroup(chat)
+              !isTargetGroup(
+                chat
+              )
             ) {
               continue;
             }
@@ -3191,8 +4276,11 @@ async function startBot() {
             ==========================================
             */
 
-            if (!messageLog[chat]) {
-              messageLog[chat] = {};
+            if (
+              !messageLog[chat]
+            ) {
+              messageLog[chat] =
+                {};
             }
 
             if (
@@ -3213,74 +4301,8 @@ async function startBot() {
               Date.now()
             );
 
-            /*
-            ==========================================
-            MEMBER SENT MESSAGE
-            CLEAR OLD WARNING IMMEDIATELY
-            ==========================================
-            */
-
-            if (warnings[chat]) {
-              const possibleKeys = [
-                sender,
-                normalizeJid(
-                  senderLid
-                ),
-                normalizeJid(
-                  senderPhone
-                )
-              ];
-
-              let warningCleared =
-                false;
-
-              for (
-                const key
-                of possibleKeys
-              ) {
-                if (
-                  key &&
-                  warnings[chat][key]
-                ) {
-                  delete warnings[chat][key];
-
-                  warningCleared =
-                    true;
-                }
-              }
-
-              const phone =
-                getPhoneFromAnyId(
-                  sender
-                );
-
-              if (phone) {
-                const phoneKey =
-                  `${phone}@s.whatsapp.net`;
-
-                if (
-                  warnings[chat][phoneKey]
-                ) {
-                  delete warnings[chat][phoneKey];
-
-                  warningCleared =
-                    true;
-                }
-              }
-
-              if (
-                warningCleared
-              ) {
-                console.log(
-                  "✅ MEMBER ACTIVE - WARNING CLEARED:",
-                  sender
-                );
-
-                changed = true;
-              }
-            }
-
-            changed = true;
+            changed =
+              true;
 
             console.log(
               `💬 MESSAGE SAVED: ${chat}`
@@ -3290,15 +4312,21 @@ async function startBot() {
           if (changed) {
             await saveData();
           }
+
         } catch (error) {
+
           console.log(
             "❌ MESSAGE ERROR:",
             error.message
           );
+
         }
+
       }
     );
+
   } catch (error) {
+
     console.log(
       "❌ START ERROR:",
       error.message
@@ -3310,7 +4338,8 @@ async function startBot() {
     connectionStatus =
       "error";
 
-    reconnecting = false;
+    reconnecting =
+      false;
 
     setTimeout(
       startBot,
@@ -3327,20 +4356,25 @@ QR EXPIRY
 
 setInterval(
   () => {
+
     if (
       latestQR &&
       Date.now() -
         qrGeneratedAt >
         QR_EXPIRE
     ) {
+
       console.log(
         "♻️ QR EXPIRED"
       );
 
-      latestQR = null;
+      latestQR =
+        null;
 
-      qrGeneratedAt = 0;
+      qrGeneratedAt =
+        0;
     }
+
   },
   10000
 );
@@ -3353,36 +4387,44 @@ GROUP RESCAN
 
 setInterval(
   async () => {
+
     if (
       sock &&
       ownerJid &&
       connectionStatus ===
         "connected"
     ) {
+
       await findTargetGroups();
+
     }
+
   },
   30000
 );
 
 /*
 ==================================================
-AUTOMATIC 7-DAY REPORT
+AUTOMATIC 5-DAY REPORT
 ==================================================
 
-YAHAN processWarnings = TRUE HAI.
+5 din complete:
 
-Isliye automatic cycle:
-
-1. Group report
-2. 0 message walay ko private warning
-3. Already warned + again 0 = removal
+1. Report group mein send
+2. 0-message members identify
+3. Warning nahi
+4. Private message nahi
+5. Zero-message member ko remove attempt
+6. New 5-day cycle
+7. Message log reset
 ==================================================
 */
 
 setInterval(
   async () => {
+
     try {
+
       const end =
         Number(
           botState.cycleStart
@@ -3394,19 +4436,22 @@ setInterval(
           1000;
 
       if (
-        Date.now() >= end
+        Date.now() >=
+        end
       ) {
+
         if (
           sock &&
           ownerJid
         ) {
+
           console.log(
-            "⏰ 7 DAYS COMPLETE"
+            "⏰ 5 DAYS COMPLETE"
           );
 
           /*
           ----------------------------------------
-          AUTOMATIC PROCESS
+          REPORT + REMOVAL
           ----------------------------------------
           */
 
@@ -3414,9 +4459,17 @@ setInterval(
             const group
             of savedGroups
           ) {
+
             await sendReport(
-              group.jid,
-              true
+              group.jid
+            );
+
+            /*
+            Small pause between groups.
+            */
+
+            await sleep(
+              3000
             );
           }
 
@@ -3429,21 +4482,35 @@ setInterval(
           botState.cycleStart =
             Date.now();
 
-          messageLog = {};
+          messageLog =
+            {};
+
+          /*
+          Warning data permanently empty.
+          */
+
+          warnings =
+            {};
 
           await saveData();
 
           console.log(
-            "🔄 NEW 7-DAY CYCLE STARTED"
+            "🔄 NEW 5-DAY CYCLE STARTED"
           );
+
         }
+
       }
+
     } catch (error) {
+
       console.log(
         "❌ AUTO REPORT ERROR:",
         error.message
       );
+
     }
+
   },
   60000
 );
@@ -3458,16 +4525,17 @@ app.listen(
   PORT,
   "0.0.0.0",
   () => {
+
     console.log(
       "================================"
     );
 
     console.log(
-      "🤖 WHATSAPP REPORT BOT"
+      "🤖 WHATSAPP ACTIVITY BOT"
     );
 
     console.log(
-      "🌈 BAMB DASHBOARD: ON"
+      "✨ PREMIUM DASHBOARD: ON"
     );
 
     console.log(
@@ -3480,23 +4548,18 @@ app.listen(
     );
 
     console.log(
-      "📊 !RANA: REPORT ONLY"
+      "📊 REPORT:",
+      `${REPORT_DAYS} DAYS`
     );
 
     console.log(
-      "📊 !STATS: REPORT ONLY"
+      "🔕 PRIVATE WARNING:",
+      "OFF"
     );
 
     console.log(
-      "⏰ 7-DAY AUTO REPORT: ON"
-    );
-
-    console.log(
-      "⚠️ PRIVATE WARNING: ON"
-    );
-
-    console.log(
-      "🚫 AUTO REMOVAL: ON"
+      "🚫 ZERO-MESSAGE REMOVAL:",
+      "ON"
     );
 
     console.log(
@@ -3507,6 +4570,7 @@ app.listen(
     console.log(
       "================================"
     );
+
   }
 );
 
@@ -3517,6 +4581,7 @@ BOOT
 */
 
 (async () => {
+
   console.log(
     "🚀 Starting WhatsApp Bot..."
   );
@@ -3524,4 +4589,5 @@ BOOT
   await loadCloudData();
 
   startBot();
+
 })();
